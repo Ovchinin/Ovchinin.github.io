@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Room details</title>
+  <link href="/vendors.css" rel="stylesheet"><link href="/app.css" rel="stylesheet"></head>
+  <body>
+    <header class="header">
+      <div class="container">
+        <div class="nav-bar">
+              <div class="logo-group"><img class="logo-img" src="./images/logo/logo.png"><img class="logo-text" src="./images/logo/TOXIN.svg"></div>
+              <div class="nav main-menu"></div>
+        </div>
+      </div>
+    </header>
+    <section class="room-details">
+      <div class="room-gallery">
+        <div class="room-gallery__item"><img class="room-gallery__img" src="/images/room-gallery/image.jpg" alt="room-image 1"></div>
+        <div class="room-gallery__item"><img class="room-gallery__img" src="/images/room-gallery/image 2.jpg" alt="room-image 2"></div>
+        <div class="room-gallery__item"><img class="room-gallery__img" src="/images/room-gallery/image 3.jpg" alt="room-image 3"></div>
+      </div>
+      <div class="container">
+        <div class="left-block">
+          <div class="wrap-block">
+            <div class="advantages-wrap">
+              <div class="advantages__header-title">Сведения о номере</div>
+              <div class="advantages">
+                <div class="advantages__item"><i class="advantages__icon">insert_emoticon</i>
+                  <div class="advantages__info">
+                    <div class="advantages__title">Комфорт</div>
+                    <div class="advantages__descr">Шумопоглощающие стены</div>
+                  </div>
+                </div>
+                <div class="advantages__item"><i class="advantages__icon">location_city</i>
+                  <div class="advantages__info">
+                    <div class="advantages__title">Удобство</div>
+                    <div class="advantages__descr">Окно в каждой из спален</div>
+                  </div>
+                </div>
+                <div class="advantages__item"><i class="advantages__icon">whatshot</i>
+                  <div class="advantages__info">
+                    <div class="advantages__title">Уют</div>
+                    <div class="advantages__descr">Номер оснащён камином</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="impressions-wrap">
+              <div class="advantages__header-title">Впечатления от номера</div>
+              <div class="chart">
+                <canvas class="myChart" id="myChart" width="124" height="124"></canvas>
+                <div class="labels" id="labels"></div>
+              </div>
+            </div>
+          </div>
+          <div class="wrap-reviews">
+            <div class="reviews__header">
+              <div class="reviews__header-title">Отзывы посетителей номера</div>
+              <div class="reviews__length">2 отзыва</div>
+            </div>
+            <div class="reviews">
+              <div class="reviews__item">
+                <div class="reviews__left-block"><img class="reviews__photo" src="/images/review/image.png" alt="">
+                  <div class="reviews__like">
+                    <div class="like-button"><i class="material-icons like-button__icon">favorite_border</i>
+                      <input class="like-button__input" type="number" id="like" name="like" value="12">
+                    </div>
+                  </div>
+                </div>
+                <div class="reviews__right-block">
+                  <div class="reviews__name">Мурад Сарафанов</div>
+                  <div class="reviews__date">5 дней назад</div>
+                  <div class="reviews__review">Великолепный матрас на кровати в основной спальне! А пуфик вообще потрясающий. И стены, действительно, шумоподавляющие. Выкрикивал комплименты повару — никто не жаловался из соседей.</div>
+                </div>
+              </div>
+              <div class="reviews__item">
+                <div class="reviews__left-block"><img class="reviews__photo" src="/images/review/avatar2.png" alt="">
+                  <div class="reviews__like">
+                    <div class="like-button"><i class="material-icons like-button__icon">favorite_border</i>
+                      <input class="like-button__input" type="number" id="like" name="like" value="2">
+                    </div>
+                  </div>
+                </div>
+                <div class="reviews__right-block">
+                  <div class="reviews__name">Патрисия Стёклышкова</div>
+                  <div class="reviews__date">Неделю назад</div>
+                  <div class="reviews__review">Обслуживание на высоте! Всё аккуратно, чисто. Завтраки в номер советую заказать, каждый день новое блюдо и десерт как комплимент</div>
+                </div>
+              </div>
+            </div>
+            <div class="block-groups">
+              <div class="bullet-list">
+                <div class="bullet-list__title">Правила</div>
+                <ul class="bullet-list__items">
+                  <li class="bullet-list__item">Нельзя с питомцами</li>
+                  <li class="bullet-list__item">Без вечеринок и мероприятий</li>
+                  <li class="bullet-list__item">Время прибытия — после 13:00, а выезд до 12:00</li>
+                </ul>
+              </div>
+              <div class="block-groups__right"> 
+                <div class="block-groups__right-title">Отмена</div>
+                <div class="block-groups__right-info">Бесплатная отмена в течение 48 ч. После этого при отмене не позднее чем за 5 дн. до прибытия вы получите полный возврат за вычетом сбора за услуги.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="right-block">
+          <div class="booking-form">
+            <div class="booking-form__header">
+              <div class="booking-form__number-group"><span class="booking-form__number">№</span><span class="booking-form__number-item">888</span><span class="booking-form__number-category">люкс</span></div>
+              <div class="booking-form__number-price-group"><span class="booking-form__number-price">9 990</span><span class="booking-form__number-currency-type">₽</span><span class="booking-form__number-per-day">в сутки</span></div>
+            </div>
+            <div class="dropdown-calendar booking-form__calendar">
+              <div class="dropdown-calendar__item">
+                <label class="dropdown-calendar__label h3" for="start">Прибытие</label>
+                <input class="date-start" type="text" id="start" placeholder="ДД.ММ.ГГГГ" data-range="true" autocomplete="off"><i class="dropdown-calendar__icon">expand_more</i>
+              </div>
+              <div class="dropdown-calendar__item">
+                <label class="dropdown-calendar__label h3" for="end">Выезд</label>
+                <input class="date-end" type="text" id="end" placeholder="ДД.ММ.ГГГГ" data-range="true" autocomplete="off"><i class="dropdown-calendar__icon">expand_more</i>
+              </div>
+            </div>
+            <div class="dropdown booking-form__guest">
+              <h3 class="dropdown-title">Гости</h3>
+              <div class="dropdown-list dropdown--guest">
+                <div class="dropdown__header">
+                  <div class="dropdown__header-value" data-title="Сколько гостей">Сколько гостей</div><i class="dropdown__icon">expand_more</i>
+                </div>
+                <div class="dropdown__list-items">
+                  <div class="dropdown__item">
+                    <p class="dropdown__item-title">взрослые</p>
+                    <div class="dropdown__input-control">
+                      <button class="minus" disabled>-</button>
+                      <input class="input" type="number" min="0" max="10" step="1" value="0">
+                      <button class="plus">+</button>
+                    </div>
+                  </div>
+                  <div class="dropdown__item">
+                    <p class="dropdown__item-title">дети</p>
+                    <div class="dropdown__input-control">
+                      <button class="minus" disabled>-</button>
+                      <input class="input" type="number" min="0" max="10" step="1" value="0">
+                      <button class="plus">+</button>
+                    </div>
+                  </div>
+                  <div class="dropdown__item">
+                    <p class="dropdown__item-title">младенцы</p>
+                    <div class="dropdown__input-control">
+                      <button class="minus" disabled>-</button>
+                      <input class="input" type="number" min="0" max="10" step="1" value="0">
+                      <button class="plus">+</button>
+                    </div>
+                  </div>
+                  <div class="dropdown__button-block"><a class="button-link dropdown__clear">Очистить</a><a class="button-link dropdown__apply">Применить</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="booking-form__calculator">
+              <div class="booking-form__room-price-group">
+                <div class="booking-form__left-group">
+                  <div class="booking-form__room-price"><span class="booking-form__price">9 990</span><span class="booking-form__currency-type">₽</span><span class="booking-form__separator">х</span></div>
+                  <div class="booking-form__days">
+                    <div class="booking-form__days">4</div>
+                    <div class="booking-form__days-label">суток</div>
+                  </div>
+                </div>
+                <div class="booking-form__preliminary-price"><span class="booking-form__price">39 960</span><span class="booking-form__currency-type">₽</span></div>
+              </div>
+              <div class="booking-form__service-fee-group">
+                <div class="booking-form__left-group"><span class="booking-form__service-fee-description">Сбор за услуги: </span>
+                  <div class="booking-form__service-fee-info"><span class="booking-form__service-fee-info-type">скидка </span><span class="booking-form__service-fee-info-price">2 179</span><span class="booking-form__service-fee-info-currency-type">₽</span><i class="material-icons booking-form__info-icon">error_outline</i></div>
+                </div>
+                <div class="booking-form__preliminary-price"><span class="booking-form__price">0</span><span class="booking-form__currency-type">₽</span></div>
+              </div>
+              <div class="booking-form__extra-charges-group">
+                <div class="booking-form__left-group">
+                  <div class="booking-form__extra-charges-description">Сбор за дополнительные услуги</div><i class="material-icons booking-form__info-icon">error_outline</i>
+                </div>
+                <div class="booking-form__preliminary-price"><span class="booking-form__price">300</span><span class="booking-form__currency-type">₽</span></div>
+              </div>
+              <div class="booking-form__total-price-group">
+                <div class="booking-form__total-price-info">Итого</div>
+                <div class="booking-form__total-price-separator"></div>
+                <div class="booking-form__total-price"><span class="booking-form__total-price-value">38 081</span><span class="booking-form__total-price-currency-type">₽</span></div>
+              </div>
+            </div><a class="button-100 booking-form__button">забронировать<i class="button__icon">arrow_forward</i></a>
+          </div>
+        </div>
+      </div>
+    </section>
+    <footer>
+      <div class="footer__top">
+        <div class="container">
+          <div class="footer__left-bar">
+            <div class="logo-group"><img class="logo-img" src="./images/logo/logo.png"><img class="logo-text" src="./images/logo/TOXIN.svg"></div>
+            <div class="footer__left-bar-info">Бронирование номеров в лучшем отеле 2019 года по версии ассоциации «Отельные взгляды»</div>
+          </div>
+              <div class="footer-menu"></div>
+          <div class="footer__right-bar">
+            <div class="footer__right-bar-title h3">Подписка</div>
+            <div class="footer__right-bar-info">Получайте специальные предложения и новости сервиса</div>
+                <div class="text-field">
+                  <input class="text-field__input" type="text" id="name label" name="name label" placeholder="Email"><i class="input__icon">arrow_forward</i>
+                </div>
+          </div>
+        </div>
+      </div>
+      <div class="copyright-bar">
+        <div class="container">
+              <div class="copyright">Copyright © 2018 Toxin отель. Все права защищены.</div>
+              <div class="social-links"><a class="social-links__link" href="#"><i class="fab fa-twitter"></i></a><a class="social-links__link" href="#"><img class="icon-img" src="./images/facebook-icon.svg" alt="social-icon"></a><a class="social-links__link" href="#"><i class="fab fa-instagram"></i></a>
+              </div>
+        </div>
+      </div>
+    </footer>
+  <script src="/vendors.js"></script><script src="/app.js"></script></body>
+</html>
