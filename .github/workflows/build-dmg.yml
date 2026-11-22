@@ -1,0 +1,59 @@
+name: Build macOS DMG
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+    paths:
+      - "whisper-transcriber/**"
+      - ".github/workflows/build-dmg.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: whisper-transcriber
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Pillow
+        run: python3 -m pip install "Pillow>=10"
+
+      - name: Build .app and .dmg
+        run: |
+          chmod +x scripts/build_dmg.sh macos/Transkribaciya
+          ./scripts/build_dmg.sh
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Transkribaciya-dmg
+          path: whisper-transcriber/dist/Транскрибация.dmg
+
+      - name: Publish GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: whisper-transcriber/dist/Транскрибация.dmg
+          name: Транскрибация ${{ github.ref_name }}
+          body: |
+            Установщик macOS (`.dmg`), без App Store.
+
+            1. Скачайте `Транскрибация.dmg`
+            2. Откройте и перетащите **Транскрибация** в **Applications**
+            3. Запустите из Launchpad / Applications (можно вынести иконку на рабочий стол)
+            4. При первом запуске подтвердите бесплатную установку Whisper из приложения
+
+            Если macOS пишет, что приложение из неизвестного источника:
+            Системные настройки → Конфиденциальность и безопасность → Всё равно открыть.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
