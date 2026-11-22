@@ -90,8 +90,14 @@ class WhisperApp(ctk.CTk):
 
         sub = ctk.CTkLabel(
             self,
-            text="Видео → текст · локально · Whisper · читаемый русский",
+            text=(
+                "Переводит в текст аудио и видео файлы. "
+                "Пока только на русском языке. Локально, через Whisper."
+            ),
             text_color=("gray40", "gray65"),
+            anchor="w",
+            justify="left",
+            wraplength=720,
         )
         sub.grid(row=1, column=0, sticky="w", padx=24, pady=(0, 12))
 
