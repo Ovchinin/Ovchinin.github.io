@@ -5,7 +5,7 @@ import customtkinter as ctk
 from .installer import DependencyStatus
 
 
-WHISPER_CONSENT_TEXT = """Для работы приложения нужно установить Whisper — бесплатный движок распознавания речи от OpenAI.
+WHISPER_CONSENT_TEXT = """Для работы «Транскрибация» нужно установить Whisper — бесплатный движок распознавания речи от OpenAI.
 
 Что это значит:
 • Whisper бесплатный: без подписок и оплаты за минуты
@@ -23,7 +23,7 @@ class WhisperSetupDialog(ctk.CTkToplevel):
 
     def __init__(self, master: ctk.CTk, status: DependencyStatus) -> None:
         super().__init__(master)
-        self.title("Нужна установка Whisper")
+        self.title("Транскрибация — установка Whisper")
         self.geometry("520x460")
         self.resizable(False, False)
         self.transient(master)
@@ -41,7 +41,7 @@ class WhisperSetupDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             self,
-            text="Установка для работы приложения",
+            text="Установка для работы «Транскрибация»",
             font=ctk.CTkFont(size=18, weight="bold"),
             anchor="w",
         ).pack(anchor="w", pady=(22, 8), **pad)

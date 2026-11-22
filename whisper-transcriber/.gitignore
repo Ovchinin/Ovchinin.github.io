@@ -11,3 +11,5 @@ build/
 .whisper_models/
 *.wav
 *.log
+resources/AppIcon-ai-ref.png
+*.app/

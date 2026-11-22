@@ -49,7 +49,7 @@ class WhisperApp(ctk.CTk):
         ctk.set_appearance_mode("system")
         ctk.set_default_color_theme("blue")
 
-        self.title(f"Whisper Транскрибер {__version__}")
+        self.title(f"Транскрибация {__version__}")
         self.geometry("780x640")
         self.minsize(680, 560)
 
@@ -68,14 +68,14 @@ class WhisperApp(ctk.CTk):
 
         header = ctk.CTkLabel(
             self,
-            text="Видео → текст (Whisper)",
+            text="Транскрибация",
             font=ctk.CTkFont(size=22, weight="bold"),
         )
         header.grid(row=0, column=0, sticky="w", padx=24, pady=(20, 4))
 
         sub = ctk.CTkLabel(
             self,
-            text="Локально · без лимита размера · читаемый русский текст",
+            text="Видео → текст · локально · Whisper · читаемый русский",
             text_color=("gray40", "gray65"),
         )
         sub.grid(row=1, column=0, sticky="w", padx=24, pady=(0, 12))

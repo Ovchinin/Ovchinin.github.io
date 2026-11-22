@@ -1,3 +1,10 @@
 # Ovchinin.github.io
 
-Локальный **Whisper-транскрибер** для macOS (видео → русский текст): см. [`whisper-transcriber/README.md`](whisper-transcriber/README.md).
+## Транскрибация (macOS)
+
+Приложение **Транскрибация**: видео → текст через Whisper.
+
+- Исходники: [`whisper-transcriber/`](whisper-transcriber/)
+- Установщик: скачайте **`Транскрибация.dmg`** из [Releases](https://github.com/Ovchinin/Ovchinin.github.io/releases) (или artifact workflow **Build macOS DMG**)
+- Установка: открыть DMG → перетащить в Applications → запуск по иконке (можно на рабочий стол)
+- Без публикации в App Store

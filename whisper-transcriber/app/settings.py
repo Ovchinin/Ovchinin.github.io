@@ -16,9 +16,9 @@ def _default_desktop() -> Path:
 
 def app_support_dir() -> Path:
     if sys_platform_is_mac():
-        base = Path.home() / "Library" / "Application Support" / "WhisperTranscriber"
+        base = Path.home() / "Library" / "Application Support" / "Транскрибация"
     else:
-        base = Path.home() / ".config" / "whisper-transcriber"
+        base = Path.home() / ".config" / "transkribaciya"
     base.mkdir(parents=True, exist_ok=True)
     return base
 
