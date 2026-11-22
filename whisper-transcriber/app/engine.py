@@ -12,11 +12,11 @@ from pathlib import Path
 from typing import Callable
 
 from .ffmpeg_tools import (
+    count_audio_streams,
     find_ffmpeg,
-    has_audio_stream,
     media_duration_sec,
-    probe_suggests_no_audio,
     summarize_ffmpeg_error,
+    wav_rms_level,
 )
 from .punctuation_ru import format_russian_transcript, segments_to_plain_text, segments_to_srt
 from .models_info import download_status_message, is_model_cached, model_download_hint, models_dir
@@ -56,13 +56,50 @@ class TranscriptionCancelled(Exception):
     pass
 
 
+def _run_ffmpeg_extract(
+    ffmpeg: str,
+    cmd: list[str],
+    dest_wav: Path,
+    *,
+    duration: float,
+    on_progress: ProgressCallback | None,
+    cancel_event: threading.Event | None,
+) -> tuple[bool, str]:
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert proc.stderr is not None
+    while True:
+        if cancel_event and cancel_event.is_set():
+            proc.kill()
+            raise TranscriptionCancelled()
+        ret = proc.poll()
+        if ret is not None:
+            err = proc.stderr.read()
+            ok = ret == 0 and dest_wav.exists() and dest_wav.stat().st_size > 44
+            return ok, err
+        time.sleep(0.2)
+        if on_progress and duration > 0:
+            on_progress(
+                ProgressUpdate(
+                    stage="extract",
+                    percent=8.0,
+                    message="Извлечение и нормализация аудио…",
+                    audio_total_sec=duration,
+                )
+            )
+
+
 def extract_audio(
     source: Path,
     dest_wav: Path,
     on_progress: ProgressCallback | None = None,
     cancel_event: threading.Event | None = None,
 ) -> float:
-    """Извлечь моно-аудио 16 kHz. Размер видео не ограничивается."""
+    """Извлечь моно-аудио 16 kHz с усилением (важно для записей экрана телефона)."""
     ffmpeg = find_ffmpeg()
     if not ffmpeg:
         raise RuntimeError(
@@ -70,97 +107,149 @@ def extract_audio(
             "ffmpeg скачается автоматически, Homebrew не нужен."
         )
 
-    # Блокируем заранее только если probe явно показывает видео без Audio.
-    # Иначе пробуем извлечь (старый regex ломался на Stream #0:1[0x2](und): Audio:).
-    if probe_suggests_no_audio(source, ffmpeg):
-        raise RuntimeError(
-            "В этом файле нет звуковой дорожки — транскрибировать нечего.\n\n"
-            "Частая причина: запись экрана без микрофона / без «звук с Mac».\n"
-            "Запишите ролик со звуком или выберите другое видео/аудио."
-        )
-
     duration = media_duration_sec(source, ffmpeg)
+    n_audio = count_audio_streams(source, ffmpeg)
     if on_progress:
         on_progress(
             ProgressUpdate(
                 stage="extract",
                 percent=2.0,
-                message="Извлечение аудиодорожки…",
+                message=(
+                    "Извлечение аудиодорожки…"
+                    + (f" (найдено дорожек: {n_audio})" if n_audio else " (поиск звука…)")
+                ),
                 audio_total_sec=duration or None,
             )
         )
 
-    # Несколько стратегий map: разные контейнеры/дорожки QuickTime
-    map_strategies = (
-        ["-map", "0:a:0"],
-        ["-map", "0:a"],
-        [],  # пусть ffmpeg сам выберет аудио при -vn
+    # Фильтры: записи экрана с телефона часто очень тихие → Whisper «ломается» на буквы
+    filters = (
+        "loudnorm=I=-16:TP=-1.5:LRA=11,aresample=16000",
+        "dynaudnorm=f=150:g=15,volume=2.5,aresample=16000",
+        "volume=5.0,highpass=f=80,lowpass=f=8000,aresample=16000",
+        "aresample=16000",
     )
-    last_err = ""
-    for maps in map_strategies:
-        cmd = [
-            ffmpeg,
-            "-hide_banner",
-            "-nostdin",
-            "-y",
-            "-i",
-            str(source),
-            *maps,
-            "-vn",
-            "-sn",
-            "-dn",
-            "-ac",
-            "1",
-            "-ar",
-            "16000",
-            "-c:a",
-            "pcm_s16le",
-            str(dest_wav),
-        ]
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+
+    attempts: list[list[str]] = []
+    if n_audio >= 2:
+        # Смешать все аудидорожки (на телефонах бывает «микрофон + звук приложения»)
+        inputs = "".join(f"[0:a:{i}]" for i in range(min(n_audio, 4)))
+        n = min(n_audio, 4)
+        for af in filters[:2]:
+            attempts.append(
+                [
+                    ffmpeg,
+                    "-hide_banner",
+                    "-nostdin",
+                    "-y",
+                    "-i",
+                    str(source),
+                    "-filter_complex",
+                    f"{inputs}amix=inputs={n}:duration=longest:dropout_transition=0,{af}[aout]",
+                    "-map",
+                    "[aout]",
+                    "-ac",
+                    "1",
+                    "-c:a",
+                    "pcm_s16le",
+                    str(dest_wav),
+                ]
+            )
+    for af in filters:
+        attempts.append(
+            [
+                ffmpeg,
+                "-hide_banner",
+                "-nostdin",
+                "-y",
+                "-i",
+                str(source),
+                "-map",
+                "0:a:0?",
+                "-vn",
+                "-sn",
+                "-dn",
+                "-af",
+                af,
+                "-ac",
+                "1",
+                "-c:a",
+                "pcm_s16le",
+                str(dest_wav),
+            ]
         )
-        assert proc.stderr is not None
-        while True:
-            if cancel_event and cancel_event.is_set():
-                proc.kill()
-                raise TranscriptionCancelled()
-            ret = proc.poll()
-            if ret is not None:
-                err = proc.stderr.read()
-                if ret == 0 and dest_wav.exists() and dest_wav.stat().st_size > 0:
-                    if on_progress:
-                        on_progress(
-                            ProgressUpdate(
-                                stage="extract",
-                                percent=12.0,
-                                message="Аудио готово, загрузка модели Whisper…",
-                                audio_total_sec=duration or None,
-                            )
-                        )
-                    return duration or media_duration_sec(dest_wav, ffmpeg)
-                last_err = err
+        attempts.append(
+            [
+                ffmpeg,
+                "-hide_banner",
+                "-nostdin",
+                "-y",
+                "-i",
+                str(source),
+                "-vn",
+                "-sn",
+                "-dn",
+                "-af",
+                af,
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-c:a",
+                "pcm_s16le",
+                str(dest_wav),
+            ]
+        )
+
+    last_err = ""
+    best_path: Path | None = None
+    best_rms = -1.0
+    for cmd in attempts:
+        ok, err = _run_ffmpeg_extract(
+            ffmpeg,
+            cmd,
+            dest_wav,
+            duration=duration,
+            on_progress=on_progress,
+            cancel_event=cancel_event,
+        )
+        if not ok:
+            last_err = err
+            continue
+        rms = wav_rms_level(dest_wav)
+        if rms > best_rms:
+            best_rms = rms
+            # сохраняем лучший вариант во временную копию
+            best_path = dest_wav.with_suffix(".best.wav")
+            shutil.copy2(dest_wav, best_path)
+            # достаточно громко — можно остановиться
+            if rms >= 0.02:
                 break
-            time.sleep(0.2)
-            if on_progress and duration > 0:
-                on_progress(
-                    ProgressUpdate(
-                        stage="extract",
-                        percent=8.0,
-                        message="Извлечение аудиодорожки…",
-                        audio_total_sec=duration,
-                    )
+
+    if best_path and best_path.exists():
+        shutil.move(str(best_path), str(dest_wav))
+        if on_progress:
+            msg = "Аудио готово, загрузка модели Whisper…"
+            if best_rms < 0.01:
+                msg = "Аудио тихое (запись экрана?) — усилили. Загрузка модели…"
+            on_progress(
+                ProgressUpdate(
+                    stage="extract",
+                    percent=12.0,
+                    message=msg,
+                    audio_total_sec=duration or None,
                 )
+            )
+        return duration or media_duration_sec(dest_wav, ffmpeg)
 
     detail = summarize_ffmpeg_error(last_err)
     if _looks_like_missing_audio(detail) or _looks_like_missing_audio(last_err):
         raise RuntimeError(
-            "В этом файле нет звуковой дорожки — транскрибировать нечего.\n\n"
-            "Частая причина: запись экрана без микрофона / без «звук с Mac».\n"
-            "Запишите ролик со звуком или выберите другое видео/аудио."
+            "Не удалось найти звуковую дорожку, которую можно извлечь.\n\n"
+            "Если в плеере звук есть, пришлите формат файла (например mp4/mov) — "
+            "иногда запись экрана с телефона кладёт звук в нестандартный поток.\n"
+            "Попробуйте экспортировать/пересохранить видео через «Файлы»/Галерею "
+            "или сконвертировать в MP4 с AAC."
         )
     raise RuntimeError(f"Не удалось извлечь звук из файла.\n\n{detail}")
 
@@ -406,16 +495,20 @@ def transcribe_media(
             cancel_event=cancel_event,
         )
         try:
+            # Для тихих записей экрана с телефона VAD часто «съедает» речь,
+            # а condition_on_previous_text даёт обрывки/отдельные буквы.
             segments_iter, info = model.transcribe(
                 str(audio_path),
                 language=settings.language or "ru",
                 task="transcribe",
-                vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=500),
-                beam_size=2,
-                best_of=2,
-                condition_on_previous_text=True,
+                vad_filter=False,
+                beam_size=3,
+                best_of=3,
+                temperature=0.0,
+                condition_on_previous_text=False,
                 word_timestamps=False,
+                no_speech_threshold=0.5,
+                compression_ratio_threshold=2.4,
             )
         finally:
             vad_stop.set()

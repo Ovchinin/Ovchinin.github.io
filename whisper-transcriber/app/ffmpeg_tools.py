@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import math
 import os
 import platform
 import re
 import shutil
 import stat
+import struct
 import subprocess
 import urllib.request
+import wave
 import zipfile
 from pathlib import Path
 
@@ -171,6 +174,11 @@ def has_audio_stream(media: Path, ffmpeg: str | None = None) -> bool:
     return bool(_AUDIO_STREAM_RE.search(text) or _AUDIO_ANY_RE.search(text))
 
 
+def count_audio_streams(media: Path, ffmpeg: str | None = None) -> int:
+    text = _ffmpeg_probe_text(media, ffmpeg)
+    return len(_AUDIO_ANY_RE.findall(text))
+
+
 def probe_suggests_no_audio(media: Path, ffmpeg: str | None = None) -> bool:
     """True только если в probe явно есть видеопотоки и ни одной Audio-строки."""
     text = _ffmpeg_probe_text(media, ffmpeg)
@@ -179,6 +187,40 @@ def probe_suggests_no_audio(media: Path, ffmpeg: str | None = None) -> bool:
     has_audio = bool(_AUDIO_STREAM_RE.search(text) or _AUDIO_ANY_RE.search(text))
     has_video = bool(re.search(r"Stream\s+#.*\bVideo\b", text, re.I))
     return has_video and not has_audio
+
+
+def wav_rms_level(path: Path, max_samples: int = 400_000) -> float:
+    """Оценка громкости WAV (0..1). Для тихих записей экрана телефона."""
+    try:
+        with wave.open(str(path), "rb") as wf:
+            if wf.getsampwidth() != 2:
+                return 0.5  # неизвестный формат — не трогаем
+            nframes = wf.getnframes()
+            channels = max(wf.getnchannels(), 1)
+            if nframes <= 0:
+                return 0.0
+            # Читаем равномерно по файлу, не весь целиком
+            step_frames = max(1, nframes // max(max_samples // channels, 1))
+            total = 0.0
+            used = 0
+            pos = 0
+            while pos < nframes and used < max_samples:
+                wf.setpos(pos)
+                chunk = wf.readframes(1)
+                if not chunk:
+                    break
+                count = len(chunk) // 2
+                samples = struct.unpack("<" + "h" * count, chunk)
+                for s in samples:
+                    v = s / 32768.0
+                    total += v * v
+                    used += 1
+                pos += step_frames
+            if used == 0:
+                return 0.0
+            return math.sqrt(total / used)
+    except Exception:
+        return 0.0
 
 
 def summarize_ffmpeg_error(stderr: str) -> str:
