@@ -9,6 +9,7 @@ import tkinter.messagebox as messagebox
 from pathlib import Path
 
 import customtkinter as ctk
+from PIL import Image, ImageDraw
 
 from . import __version__
 from .engine import ProgressUpdate, TranscriptionCancelled, transcribe_media
@@ -41,6 +42,59 @@ _SECONDARY_BTN = {
     "text_color": ("gray15", "gray92"),
     "text_color_disabled": ("gray40", "gray70"),
 }
+
+_COPY_BTN_LABEL = "Скопировать результат"
+_COPIED_BTN_LABEL = "Скопировано"
+_ICON_PX = 26  # крупная иконка рядом с подписью кнопки
+
+
+def _draw_copy_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
+    """Два перекрывающихся листа — классическая иконка копирования."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    stroke = max(3, size // 8)
+    radius = max(3, size // 9)
+    # Задний лист (почти во весь холст — без лишних полей)
+    draw.rounded_rectangle(
+        (size * 0.22, size * 0.04, size * 0.96, size * 0.78),
+        radius=radius,
+        outline=fill,
+        width=stroke,
+    )
+    # Передний лист
+    draw.rounded_rectangle(
+        (size * 0.04, size * 0.22, size * 0.78, size * 0.96),
+        radius=radius,
+        outline=fill,
+        width=stroke,
+    )
+    return img
+
+
+def _draw_check_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    w = max(3, size // 7)
+    points = [
+        (size * 0.12, size * 0.52),
+        (size * 0.40, size * 0.80),
+        (size * 0.90, size * 0.18),
+    ]
+    draw.line(points, fill=fill, width=w, joint="curve")
+    return img
+
+
+def _make_btn_icon(kind: str = "copy") -> ctk.CTkImage:
+    """CTkImage с light/dark вариантами — иконка крупная и контрастная."""
+    master = _ICON_PX * 3  # рисуем в 3× для чёткости на Retina
+    light = (20, 20, 20, 255)
+    dark = (245, 245, 245, 255)
+    drawer = _draw_copy_glyph if kind == "copy" else _draw_check_glyph
+    return ctk.CTkImage(
+        light_image=drawer(master, light),
+        dark_image=drawer(master, dark),
+        size=(_ICON_PX, _ICON_PX),
+    )
 
 
 def _model_name_from_menu(label: str) -> str:
@@ -261,11 +315,15 @@ class WhisperApp(ctk.CTk):
         )
         self.result_title.grid(row=0, column=0, sticky="w")
 
+        self._copy_icon = _make_btn_icon("copy")
+        self._copied_icon = _make_btn_icon("check")
         self.copy_btn = ctk.CTkButton(
             result_header,
-            text="⎘  Скопировать результат",
-            width=200,
-            height=30,
+            text=_COPY_BTN_LABEL,
+            image=self._copy_icon,
+            compound="left",
+            width=240,
+            height=36,
             command=self._copy_result,
             state="disabled",
             **_SECONDARY_BTN,
@@ -427,7 +485,8 @@ class WhisperApp(ctk.CTk):
             self._result_ready = result_ready
         self.copy_btn.configure(
             state="normal" if self._result_ready else "disabled",
-            text="⎘  Скопировать результат",
+            text=_COPY_BTN_LABEL,
+            image=self._copy_icon,
         )
 
     def _copy_result(self) -> None:
@@ -443,13 +502,13 @@ class WhisperApp(ctk.CTk):
         except Exception as exc:
             messagebox.showerror("Буфер обмена", f"Не удалось скопировать:\n{exc}", parent=self)
             return
-        self.copy_btn.configure(text="✓  Скопировано")
-        self.after(
-            1800,
-            lambda: self.copy_btn.configure(text="⎘  Скопировать результат")
-            if self.winfo_exists()
-            else None,
-        )
+        self.copy_btn.configure(text=_COPIED_BTN_LABEL, image=self._copied_icon)
+
+        def _restore() -> None:
+            if self.winfo_exists():
+                self.copy_btn.configure(text=_COPY_BTN_LABEL, image=self._copy_icon)
+
+        self.after(1800, _restore)
 
     def _on_progress(self, update: ProgressUpdate) -> None:
         def apply() -> None:
