@@ -49,6 +49,6 @@ chmod +x scripts/build_dmg.sh macos/Transkribaciya
 
 - macOS 12+
 - **Python 3.10–3.13** (лучше **3.12** с [python.org](https://www.python.org/downloads/macos/)). Python **3.14 не подходит** — нет `onnxruntime` для Whisper
-- Homebrew желателен (приложение само поставит `ffmpeg` после согласия)
+- Homebrew **не нужен**: после согласия приложение само скачает Whisper и ffmpeg
 
 Если раньше открывали приложение на Python 3.14 — закройте его, поставьте 3.12 и откройте снова: venv пересоздастся сам.

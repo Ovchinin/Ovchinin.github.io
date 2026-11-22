@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from typing import Callable
+
+from .ffmpeg_tools import ensure_ffmpeg, find_ffmpeg
 
 
 ProgressCallback = Callable[[str, float], None]
@@ -31,10 +32,6 @@ class DependencyStatus:
 
 def _module_available(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
-
-
-def find_ffmpeg() -> str | None:
-    return shutil.which("ffmpeg")
 
 
 def python_supported(info: tuple[int, int] | None = None) -> bool:
@@ -63,7 +60,7 @@ def check_dependencies() -> DependencyStatus:
 
     ffmpeg_path = find_ffmpeg()
     ffmpeg_ok = ffmpeg_path is not None
-    details.append(f"ffmpeg — {'найден: ' + ffmpeg_path if ffmpeg_ok else 'не найден'}")
+    details.append(f"ffmpeg — {'найден: ' + ffmpeg_path if ffmpeg_ok else 'будет скачан приложением'}")
 
     whisper_ok = _module_available("faster_whisper")
     details.append(f"faster-whisper — {'установлен' if whisper_ok else 'не установлен'}")
@@ -100,25 +97,13 @@ def _run(cmd: list[str], on_progress: ProgressCallback | None = None, label: str
         )
 
 
-def install_ffmpeg_mac(on_progress: ProgressCallback | None = None) -> None:
-    brew = shutil.which("brew")
-    if not brew:
-        raise RuntimeError(
-            "Homebrew не найден. Установите с https://brew.sh и повторите, "
-            "либо выполните вручную: brew install ffmpeg"
-        )
-    if on_progress:
-        on_progress("Установка ffmpeg через Homebrew…", 0.2)
-    _run([brew, "install", "ffmpeg"], on_progress, "Установка ffmpeg…")
-
-
 def install_python_packages(on_progress: ProgressCallback | None = None) -> None:
     if not python_supported():
         raise RuntimeError(python_requirement_message())
 
     req = os.path.join(os.path.dirname(os.path.dirname(__file__)), "requirements.txt")
     if on_progress:
-        on_progress("Установка Python-пакетов (faster-whisper)…", 0.4)
+        on_progress("Установка Python-пакетов (Whisper и ffmpeg)…", 0.35)
     _run(
         [sys.executable, "-m", "pip", "install", "--upgrade", "pip"],
         on_progress,
@@ -127,16 +112,17 @@ def install_python_packages(on_progress: ProgressCallback | None = None) -> None
     _run(
         [sys.executable, "-m", "pip", "install", "-r", req],
         on_progress,
-        "Установка faster-whisper и GUI…",
+        "Установка Whisper и компонентов…",
     )
     if on_progress:
-        on_progress("Пакеты установлены", 0.9)
+        on_progress("Пакеты установлены", 0.7)
 
 
 def ensure_dependencies(
     on_progress: ProgressCallback | None = None,
     install_ffmpeg: bool = True,
 ) -> DependencyStatus:
+    """Установить всё из приложения: Whisper + ffmpeg. Homebrew не нужен."""
     status = check_dependencies()
     if status.ready:
         if on_progress:
@@ -146,17 +132,11 @@ def ensure_dependencies(
     if not status.python_ok:
         raise RuntimeError(python_requirement_message())
 
-    if not status.whisper_ok:
+    if not status.whisper_ok or not _module_available("imageio_ffmpeg"):
         install_python_packages(on_progress)
 
-    status = check_dependencies()
-    if not status.ffmpeg_ok and install_ffmpeg:
-        if os.uname().sysname == "Darwin":
-            install_ffmpeg_mac(on_progress)
-        else:
-            raise RuntimeError(
-                "ffmpeg не найден. Установите его (на Mac: brew install ffmpeg) и перезапустите."
-            )
+    if install_ffmpeg:
+        ensure_ffmpeg(on_progress=on_progress)
 
     status = check_dependencies()
     if on_progress:

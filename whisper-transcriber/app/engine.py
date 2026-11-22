@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from .ffmpeg_tools import find_ffmpeg, media_duration_sec
 from .punctuation_ru import format_russian_transcript, segments_to_plain_text, segments_to_srt
 from .settings import AppSettings
 
@@ -45,26 +46,6 @@ class TranscriptionCancelled(Exception):
     pass
 
 
-def _ffprobe_duration(media: Path) -> float:
-    cmd = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "default=noprint_wrappers=1:nokey=1",
-        str(media),
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        return 0.0
-    try:
-        return float(proc.stdout.strip())
-    except ValueError:
-        return 0.0
-
-
 def extract_audio(
     source: Path,
     dest_wav: Path,
@@ -72,9 +53,16 @@ def extract_audio(
     cancel_event: threading.Event | None = None,
 ) -> float:
     """Извлечь моно-аудио 16 kHz. Размер видео не ограничивается."""
-    duration = _ffprobe_duration(source)
+    ffmpeg = find_ffmpeg()
+    if not ffmpeg:
+        raise RuntimeError(
+            "ffmpeg не найден. Откройте установку компонентов в приложении ещё раз — "
+            "ffmpeg скачается автоматически, Homebrew не нужен."
+        )
+
+    duration = media_duration_sec(source, ffmpeg)
     cmd = [
-        "ffmpeg",
+        ffmpeg,
         "-y",
         "-i",
         str(source),
@@ -136,7 +124,7 @@ def extract_audio(
                 audio_total_sec=duration or None,
             )
         )
-    return duration or _ffprobe_duration(dest_wav)
+    return duration or media_duration_sec(dest_wav, ffmpeg)
 
 
 def _resolve_device(preference: str) -> str:
