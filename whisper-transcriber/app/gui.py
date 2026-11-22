@@ -13,6 +13,9 @@ from . import __version__
 from .engine import ProgressUpdate, TranscriptionCancelled, transcribe_media
 from .installer import DependencyStatus, check_dependencies, ensure_dependencies
 from .models_info import (
+    MODEL_ORDER,
+    all_models_legend,
+    format_avg_wait,
     format_size_gb,
     get_model_info,
     is_model_cached,
@@ -27,7 +30,7 @@ VIDEO_TYPES = [
     ("Все файлы", "*.*"),
 ]
 
-MODEL_CHOICES = ["tiny", "base", "small", "medium", "large-v3"]
+MODEL_CHOICES = list(MODEL_ORDER)
 MODEL_MENU_VALUES = [model_label_for_ui(name) for name in MODEL_CHOICES]
 
 
@@ -62,8 +65,8 @@ class WhisperApp(ctk.CTk):
         ctk.set_default_color_theme("blue")
 
         self.title(f"Транскрибация {__version__}")
-        self.geometry("780x640")
-        self.minsize(680, 560)
+        self.geometry("820x720")
+        self.minsize(720, 640)
 
         self.settings = AppSettings.load()
         self.source_path: Path | None = None
@@ -135,17 +138,27 @@ class WhisperApp(ctk.CTk):
             justify="left",
             wraplength=520,
         )
-        self.model_hint.grid(row=3, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 4))
+        self.model_hint.grid(row=3, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 2))
+
+        self.models_legend = ctk.CTkLabel(
+            form,
+            text=all_models_legend(),
+            text_color=("gray35", "gray70"),
+            anchor="w",
+            justify="left",
+            wraplength=560,
+        )
+        self.models_legend.grid(row=4, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 6))
         self._refresh_model_hint()
 
         self.srt_var = tk.BooleanVar(value=self.settings.write_srt)
         ctk.CTkCheckBox(form, text="Также сохранить .srt (субтитры)", variable=self.srt_var).grid(
-            row=4, column=1, sticky="w", padx=8, pady=(6, 12)
+            row=5, column=1, sticky="w", padx=8, pady=(6, 12)
         )
 
         # Actions
         actions = ctk.CTkFrame(form, fg_color="transparent")
-        actions.grid(row=5, column=0, columnspan=3, sticky="ew", padx=12, pady=(4, 14))
+        actions.grid(row=6, column=0, columnspan=3, sticky="ew", padx=12, pady=(4, 14))
         actions.grid_columnconfigure(0, weight=1)
 
         self.deps_label = ctk.CTkLabel(actions, text="Проверка зависимостей…", anchor="w")
@@ -281,10 +294,10 @@ class WhisperApp(ctk.CTk):
         status = "уже скачана на диск" if cached else "будет скачана при первом запуске"
         self.model_hint.configure(
             text=(
-                f"Вес: {format_size_gb(info.size_gb)}. "
-                f"Среднее время скачивания ≈ {info.avg_download_min:g} мин "
-                f"(обычно {info.eta_range} на ~50 Мбит/с). "
-                f"{info.quality_ru.capitalize()}. Сейчас: {status}."
+                f"Выбрано «{info.name}»: {format_size_gb(info.size_gb)}, "
+                f"среднее скачивание {format_avg_wait(info.avg_download_min)} "
+                f"(обычно {info.eta_range}). {info.quality_ru.capitalize()}. "
+                f"Сейчас: {status}."
             )
         )
 
@@ -408,7 +421,7 @@ class WhisperApp(ctk.CTk):
                 "Перед транскрибацией нужно один раз скачать модель.\n\n"
                 f"Модель: {info.name}\n"
                 f"Размер: {format_size_gb(info.size_gb)}\n"
-                f"Среднее время ожидания: ≈ {info.avg_download_min:g} мин "
+                f"Среднее время ожидания: {format_avg_wait(info.avg_download_min)} "
                 f"(обычно {info.eta_range} при ~50 Мбит/с)\n\n"
                 f"{info.quality_ru.capitalize()}.\n\n"
                 "Скачать сейчас и продолжить?",

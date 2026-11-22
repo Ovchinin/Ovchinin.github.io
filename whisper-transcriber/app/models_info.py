@@ -10,7 +10,7 @@ from .settings import app_support_dir
 class ModelInfo:
     name: str
     size_gb: float
-    # Среднее время скачивания при ~50 Мбит/с (типичный домашний интернет)
+    # Среднее время скачивания при ~50 Мбит/с (типичный домашний интернет), минуты
     avg_download_min: float
     # Диапазон для подсказки
     eta_range: str
@@ -19,12 +19,14 @@ class ModelInfo:
 
 # Размеры Systran/faster-whisper-* (CT2), округлённо
 MODEL_INFO: dict[str, ModelInfo] = {
-    "tiny": ModelInfo("tiny", 0.08, 0.3, "15–40 с", "быстро, менее точно"),
-    "base": ModelInfo("base", 0.15, 0.5, "30–60 с", "быстро"),
+    "tiny": ModelInfo("tiny", 0.075, 0.4, "15–40 с", "быстро, менее точно"),
+    "base": ModelInfo("base", 0.15, 0.7, "30–60 с", "быстро"),
     "small": ModelInfo("small", 0.5, 1.5, "1–3 мин", "хороший баланс"),
     "medium": ModelInfo("medium", 1.5, 4.0, "3–8 мин", "точнее, дольше"),
     "large-v3": ModelInfo("large-v3", 3.0, 8.0, "6–15 мин", "максимум качества"),
 }
+
+MODEL_ORDER = ["tiny", "base", "small", "medium", "large-v3"]
 
 
 def get_model_info(name: str) -> ModelInfo:
@@ -32,26 +34,53 @@ def get_model_info(name: str) -> ModelInfo:
 
 
 def format_size_gb(size_gb: float) -> str:
-    if size_gb < 0.1:
-        return f"~{int(size_gb * 1000)} МБ"
+    mb = size_gb * 1000
     if size_gb < 1:
-        return f"~{int(size_gb * 1000)} МБ"
+        # 75 МБ, 150 МБ, 500 МБ
+        value = int(round(mb / 5.0) * 5) if mb >= 50 else int(round(mb))
+        return f"~{value} МБ"
     text = f"{size_gb:.1f}".rstrip("0").rstrip(".")
     return f"~{text} ГБ"
+
+
+def format_avg_wait(avg_download_min: float) -> str:
+    """Человекочитаемое среднее время ожидания."""
+    if avg_download_min < 1:
+        seconds = max(15, int(round(avg_download_min * 60)))
+        return f"≈ {seconds} с"
+    if abs(avg_download_min - round(avg_download_min)) < 0.05:
+        return f"≈ {int(round(avg_download_min))} мин"
+    return f"≈ {avg_download_min:g} мин"
 
 
 def model_download_hint(name: str) -> str:
     info = get_model_info(name)
     return (
         f"Модель «{info.name}»: {format_size_gb(info.size_gb)}, "
-        f"среднее скачивание ≈ {info.avg_download_min:g} мин "
+        f"среднее скачивание {format_avg_wait(info.avg_download_min)} "
         f"(обычно {info.eta_range} на ~50 Мбит/с). {info.quality_ru}."
     )
 
 
 def model_label_for_ui(name: str) -> str:
+    """Подпись в выпадающем списке: имя — вес, среднее время."""
     info = get_model_info(name)
-    return f"{info.name} — {format_size_gb(info.size_gb)}, ≈ {info.avg_download_min:g} мин"
+    return (
+        f"{info.name} — {format_size_gb(info.size_gb)}, "
+        f"{format_avg_wait(info.avg_download_min)}"
+    )
+
+
+def all_models_legend() -> str:
+    """Полный список подписей для всех моделей."""
+    lines = ["Все модели (вес → среднее скачивание при ~50 Мбит/с):"]
+    for name in MODEL_ORDER:
+        info = get_model_info(name)
+        lines.append(
+            f"• {info.name}: {format_size_gb(info.size_gb)}, "
+            f"{format_avg_wait(info.avg_download_min)} (обычно {info.eta_range}) — {info.quality_ru}"
+        )
+    return "\n".join(lines)
 
 
 def models_dir() -> Path:
@@ -63,14 +92,12 @@ def models_dir() -> Path:
 def is_model_cached(name: str) -> bool:
     """Грубая проверка: есть ли локальные файлы модели faster-whisper."""
     root = models_dir()
-    # WhisperModel кладёт в download_root/models--Systran--faster-whisper-<name> или snapshots
     patterns = [
         f"*{name}*",
         f"*faster-whisper-{name}*",
     ]
     for pattern in patterns:
         if any(root.glob(f"**/{pattern}")):
-            # ищем хоть один бинарный/config файл существенного размера
             for path in root.glob(f"**/{pattern}"):
                 if path.is_file() and path.stat().st_size > 1_000_000:
                     return True
