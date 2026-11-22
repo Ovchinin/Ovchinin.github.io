@@ -110,15 +110,23 @@ class WhisperApp(ctk.CTk):
         ctk.CTkOptionMenu(form, values=MODEL_CHOICES, variable=self.model_var, width=160).grid(
             row=2, column=1, sticky="w", padx=8, pady=6
         )
+        ctk.CTkLabel(
+            form,
+            text="small — быстрее; medium/large — точнее. Первый запуск модели скачивает её (это не зависание).",
+            text_color=("gray40", "gray65"),
+            anchor="w",
+            justify="left",
+            wraplength=480,
+        ).grid(row=3, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 4))
 
         self.srt_var = tk.BooleanVar(value=self.settings.write_srt)
         ctk.CTkCheckBox(form, text="Также сохранить .srt (субтитры)", variable=self.srt_var).grid(
-            row=3, column=1, sticky="w", padx=8, pady=(6, 12)
+            row=4, column=1, sticky="w", padx=8, pady=(6, 12)
         )
 
         # Actions
         actions = ctk.CTkFrame(form, fg_color="transparent")
-        actions.grid(row=4, column=0, columnspan=3, sticky="ew", padx=12, pady=(4, 14))
+        actions.grid(row=5, column=0, columnspan=3, sticky="ew", padx=12, pady=(4, 14))
         actions.grid_columnconfigure(0, weight=1)
 
         self.deps_label = ctk.CTkLabel(actions, text="Проверка зависимостей…", anchor="w")

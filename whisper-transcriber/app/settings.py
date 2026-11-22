@@ -30,7 +30,7 @@ def sys_platform_is_mac() -> bool:
 @dataclass
 class AppSettings:
     output_dir: str = ""
-    model_size: str = "medium"
+    model_size: str = "small"
     language: str = "ru"
     write_srt: bool = True
     device: str = "auto"  # auto | cpu | cuda

@@ -18,7 +18,9 @@ from .ffmpeg_tools import (
     summarize_ffmpeg_error,
 )
 from .punctuation_ru import format_russian_transcript, segments_to_plain_text, segments_to_srt
-from .settings import AppSettings
+from .settings import AppSettings, app_support_dir
+
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".opus"}
 
 
 ProgressCallback = Callable[["ProgressUpdate"], None]
@@ -182,7 +184,11 @@ def _resolve_device(preference: str) -> str:
 def _resolve_compute_type(device: str) -> str:
     if device == "cuda":
         return "float16"
-    # int8 на CPU обычно быстрее и экономит память на длинных файлах
+    # На macOS int8 у ctranslate2 иногда «зависает» на загрузке — float32 надёжнее
+    import sys
+
+    if sys.platform == "darwin":
+        return "float32"
     return "int8"
 
 
@@ -190,7 +196,50 @@ _model_lock = threading.Lock()
 _model_cache: dict[tuple[str, str, str], object] = {}
 
 
-def get_model(model_size: str, device: str, compute_type: str):
+def _models_dir() -> Path:
+    path = app_support_dir() / "whisper-models"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _start_heartbeat(
+    on_progress: ProgressCallback | None,
+    *,
+    stage: str,
+    percent: float,
+    base_message: str,
+    cancel_event: threading.Event | None = None,
+) -> tuple[threading.Event, threading.Thread | None]:
+    stop = threading.Event()
+    if on_progress is None:
+        return stop, None
+
+    def _beat() -> None:
+        started = time.time()
+        while not stop.wait(2.0):
+            if cancel_event and cancel_event.is_set():
+                break
+            elapsed = int(time.time() - started)
+            on_progress(
+                ProgressUpdate(
+                    stage=stage,
+                    percent=percent,
+                    message=f"{base_message} ({elapsed} с — первый запуск может скачивать модель)",
+                )
+            )
+
+    thread = threading.Thread(target=_beat, daemon=True)
+    thread.start()
+    return stop, thread
+
+
+def get_model(
+    model_size: str,
+    device: str,
+    compute_type: str,
+    on_progress: ProgressCallback | None = None,
+    cancel_event: threading.Event | None = None,
+):
     from faster_whisper import WhisperModel
 
     key = (model_size, device, compute_type)
@@ -198,7 +247,50 @@ def get_model(model_size: str, device: str, compute_type: str):
         cached = _model_cache.get(key)
         if cached is not None:
             return cached
-        model = WhisperModel(model_size, device=device, compute_type=compute_type)
+
+        download_root = str(_models_dir())
+        stop, _thread = _start_heartbeat(
+            on_progress,
+            stage="model",
+            percent=14.0,
+            base_message=f"Загрузка модели Whisper ({model_size})",
+            cancel_event=cancel_event,
+        )
+        try:
+            if cancel_event and cancel_event.is_set():
+                raise TranscriptionCancelled()
+            # Скачает веса при первом запуске в download_root (может занять несколько минут)
+            model = WhisperModel(
+                model_size,
+                device=device,
+                compute_type=compute_type,
+                download_root=download_root,
+            )
+        except TranscriptionCancelled:
+            raise
+        except Exception:
+            # запасной compute_type, если выбранный не поддерживается
+            if compute_type != "float32":
+                if on_progress:
+                    on_progress(
+                        ProgressUpdate(
+                            stage="model",
+                            percent=14.0,
+                            message=f"Повтор загрузки модели ({model_size}, float32)…",
+                        )
+                    )
+                model = WhisperModel(
+                    model_size,
+                    device="cpu",
+                    compute_type="float32",
+                    download_root=download_root,
+                )
+                key = (model_size, "cpu", "float32")
+            else:
+                raise
+        finally:
+            stop.set()
+
         _model_cache[key] = model
         return model
 
@@ -220,9 +312,25 @@ def transcribe_media(
     wall_start = time.time()
     tmp_dir = Path(tempfile.mkdtemp(prefix="whisper_tr_"))
     audio_path = tmp_dir / "audio.wav"
+    own_temp_audio = True
 
     try:
-        duration = extract_audio(source, audio_path, on_progress, cancel_event)
+        if source.suffix.lower() in AUDIO_EXTENSIONS:
+            # mp3/wav и т.п. — Whisper читает напрямую, без перекодировки в wav
+            audio_path = source
+            own_temp_audio = False
+            duration = media_duration_sec(source)
+            if on_progress:
+                on_progress(
+                    ProgressUpdate(
+                        stage="extract",
+                        percent=12.0,
+                        message="Аудиофайл готов, подготовка модели…",
+                        audio_total_sec=duration or None,
+                    )
+                )
+        else:
+            duration = extract_audio(source, audio_path, on_progress, cancel_event)
 
         device = _resolve_device(settings.device)
         compute_type = _resolve_compute_type(device)
@@ -232,7 +340,10 @@ def transcribe_media(
                 ProgressUpdate(
                     stage="model",
                     percent=14.0,
-                    message=f"Загрузка модели Whisper ({settings.model_size})…",
+                    message=(
+                        f"Загрузка модели Whisper ({settings.model_size})… "
+                        "первый раз может скачиваться несколько минут"
+                    ),
                     audio_total_sec=duration or None,
                 )
             )
@@ -240,30 +351,46 @@ def transcribe_media(
         if cancel_event and cancel_event.is_set():
             raise TranscriptionCancelled()
 
-        model = get_model(settings.model_size, device, compute_type)
+        model = get_model(
+            settings.model_size,
+            device,
+            compute_type,
+            on_progress=on_progress,
+            cancel_event=cancel_event,
+        )
 
         if on_progress:
             on_progress(
                 ProgressUpdate(
                     stage="transcribe",
                     percent=16.0,
-                    message="Транскрибация…",
+                    message="Транскрибация: анализ аудио (VAD)…",
                     audio_total_sec=duration or None,
                 )
             )
 
-        segments_iter, info = model.transcribe(
-            str(audio_path),
-            language=settings.language or "ru",
-            task="transcribe",
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=500),
-            beam_size=5,
-            best_of=5,
-            # Пунктуация и регистр включены в модели по умолчанию
-            condition_on_previous_text=True,
-            word_timestamps=False,
+        # VAD до первого сегмента тоже может идти долго — показываем «пульс»
+        vad_stop, _vad_thread = _start_heartbeat(
+            on_progress,
+            stage="transcribe",
+            percent=16.0,
+            base_message="Транскрибация: подготовка аудио",
+            cancel_event=cancel_event,
         )
+        try:
+            segments_iter, info = model.transcribe(
+                str(audio_path),
+                language=settings.language or "ru",
+                task="transcribe",
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500),
+                beam_size=2,
+                best_of=2,
+                condition_on_previous_text=True,
+                word_timestamps=False,
+            )
+        finally:
+            vad_stop.set()
 
         total = float(getattr(info, "duration", None) or duration or 0.0)
         collected: list[dict] = []
