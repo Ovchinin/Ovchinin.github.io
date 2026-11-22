@@ -1,0 +1,54 @@
+#!/bin/bash
+# Лаунчер .app «Транскрибация»: своё venv в Application Support, GUI из Resources.
+set -euo pipefail
+
+APP_NAME="Транскрибация"
+SUPPORT="${HOME}/Library/Application Support/${APP_NAME}"
+VENV="${SUPPORT}/venv"
+LOG_DIR="${SUPPORT}/logs"
+mkdir -p "${SUPPORT}" "${LOG_DIR}"
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+RESOURCES="${ROOT}/Resources"
+APP_SRC="${RESOURCES}/app_src"
+REQ="${APP_SRC}/requirements.txt"
+
+export PYTHONUTF8=1
+export LANG="${LANG:-ru_RU.UTF-8}"
+
+find_python() {
+  if [[ -n "${TRANSKRIBACIYA_PYTHON:-}" && -x "${TRANSKRIBACIYA_PYTHON}" ]]; then
+    echo "${TRANSKRIBACIYA_PYTHON}"
+    return
+  fi
+  for c in \
+    "/usr/local/bin/python3" \
+    "/opt/homebrew/bin/python3" \
+    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3" \
+    "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3" \
+    "/usr/bin/python3"
+  do
+    if [[ -x "$c" ]]; then
+      echo "$c"
+      return
+    fi
+  done
+  osascript -e "display dialog \"Не найден Python 3. Установите Python 3.10+ с python.org, затем снова откройте «Транскрибация».\" buttons {\"OK\"} default button 1 with title \"Транскрибация\""
+  exit 1
+}
+
+PYTHON_BIN="$(find_python)"
+
+if [[ ! -x "${VENV}/bin/python" ]]; then
+  "${PYTHON_BIN}" -m venv "${VENV}"
+fi
+
+# shellcheck disable=SC1091
+source "${VENV}/bin/activate"
+
+# Минимальные пакеты GUI — Whisper поставит само приложение после согласия
+python -m pip install --upgrade pip >/dev/null 2>>"${LOG_DIR}/pip.log" || true
+python -m pip install "customtkinter>=5.2.2" "Pillow>=10.0.0" >>"${LOG_DIR}/pip.log" 2>&1 || true
+
+cd "${APP_SRC}"
+exec python main.py "$@"

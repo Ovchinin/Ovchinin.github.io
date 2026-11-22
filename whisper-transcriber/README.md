@@ -1,0 +1,52 @@
+# Транскрибация
+
+macOS-приложение: **видео → читаемый русский текст** (локальный Whisper).  
+Установка через обычный **`.dmg`**, запуск по иконке — **без App Store**.
+
+Иконка: двухцветная 2D «видео → текст».
+
+## Скачать и установить (DMG)
+
+1. Откройте [Releases](https://github.com/Ovchinin/Transcription/releases) репозитория **Transcription**  
+2. Скачайте **`Транскрибация.dmg`**  
+3. Откройте DMG и перетащите **Транскрибация** в папку **Applications**  
+4. Запустите из Applications / Launchpad  
+5. При желании перетащите иконку из Applications на **рабочий стол** или в Dock  
+
+При первом запуске приложение само предложит **бесплатно установить Whisper** из себя (после вашего подтверждения).
+
+Если macOS блокирует запуск (не из App Store):  
+**Системные настройки → Конфиденциальность и безопасность → Всё равно открыть**.
+
+> DMG собирается GitHub Actions на macOS (`Build macOS DMG`) и при теге `v*` публикуется в Releases.  
+> Вручную: Actions → **Build macOS DMG** → Run workflow, затем скачайте artifact `Transkribaciya-dmg`.
+
+## Что умеет
+
+- Выбор видео/аудио и **папки вывода** на каждую запись (по умолчанию Рабочий стол)
+- Прогресс: процент, скорость, сколько осталось
+- Без лимита размера файла
+- Русская пунктуация в результате
+- Опционально `.srt`
+
+## Сборка DMG у себя (Mac)
+
+```bash
+cd whisper-transcriber
+chmod +x scripts/build_dmg.sh macos/Transkribaciya
+./scripts/build_dmg.sh
+# → dist/Транскрибация.app
+# → dist/Транскрибация.dmg
+```
+
+## Разработка без DMG
+
+```bash
+./scripts/run_mac.sh
+```
+
+## Требования
+
+- macOS 12+
+- Python 3.10+ (для лаунчера `.app`; ставится с [python.org](https://www.python.org/downloads/) или Homebrew)
+- Homebrew желателен (приложение само поставит `ffmpeg` после согласия)
