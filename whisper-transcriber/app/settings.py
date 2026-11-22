@@ -33,6 +33,7 @@ class AppSettings:
     model_size: str = "small"
     language: str = "ru"
     write_srt: bool = True
+    notify_on_complete: bool = True
     device: str = "auto"  # auto | cpu | cuda
 
     def __post_init__(self) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import threading
 import time
 import tkinter as tk
@@ -159,12 +160,20 @@ class WhisperApp(ctk.CTk):
 
         self.srt_var = tk.BooleanVar(value=self.settings.write_srt)
         ctk.CTkCheckBox(form, text="Также сохранить .srt (субтитры)", variable=self.srt_var).grid(
-            row=5, column=1, sticky="w", padx=8, pady=(6, 12)
+            row=5, column=1, sticky="w", padx=8, pady=(6, 4)
         )
+
+        self.notify_var = tk.BooleanVar(value=self.settings.notify_on_complete)
+        ctk.CTkCheckBox(
+            form,
+            text="Получить уведомление об окончании выполнения операции",
+            variable=self.notify_var,
+            command=self._persist_form_settings,
+        ).grid(row=6, column=1, sticky="w", padx=8, pady=(0, 12))
 
         # Actions
         actions = ctk.CTkFrame(form, fg_color="transparent")
-        actions.grid(row=6, column=0, columnspan=3, sticky="ew", padx=12, pady=(4, 14))
+        actions.grid(row=7, column=0, columnspan=3, sticky="ew", padx=12, pady=(4, 14))
         actions.grid_columnconfigure(0, weight=1)
 
         self.deps_label = ctk.CTkLabel(actions, text="Проверка зависимостей…", anchor="w")
@@ -311,8 +320,38 @@ class WhisperApp(ctk.CTk):
         self.settings.output_dir = self.output_var.get().strip() or self.settings.output_dir
         self.settings.model_size = self._selected_model()
         self.settings.write_srt = bool(self.srt_var.get())
+        self.settings.notify_on_complete = bool(self.notify_var.get())
         self.settings.language = "ru"
         self.settings.save()
+
+    def _notify_completion(self, title: str, body: str) -> None:
+        """Всплывающее сообщение + системное уведомление macOS (если галочка включена)."""
+        if not self.settings.notify_on_complete:
+            return
+        try:
+            self.lift()
+            self.attributes("-topmost", True)
+            self.after(200, lambda: self.attributes("-topmost", False))
+            self.focus_force()
+        except Exception:
+            pass
+        # Системное уведомление macOS — видно даже если окно не на переднем плане
+        try:
+            safe_title = title.replace('\\', '\\\\').replace('"', '\\"')
+            safe_body = body.replace('\\', '\\\\').replace('"', '\\"')
+            subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    f'display notification "{safe_body}" with title "{safe_title}"',
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except Exception:
+            pass
+        messagebox.showinfo(title, body, parent=self)
 
     def _set_busy(self, busy: bool) -> None:
         ready = check_dependencies().ready
@@ -444,6 +483,7 @@ class WhisperApp(ctk.CTk):
             model_size=self.settings.model_size,
             language="ru",
             write_srt=self.settings.write_srt,
+            notify_on_complete=self.settings.notify_on_complete,
             device=self.settings.device,
         )
         source = self.source_path
@@ -464,11 +504,11 @@ class WhisperApp(ctk.CTk):
                         text=f"Готово → {result.text_path.name} "
                         f"({result.duration_sec:.0f} с аудио за {result.wall_sec:.0f} с)"
                     )
-                    messagebox.showinfo(
-                        "Транскрибация завершена",
+                    body = (
                         f"Текст сохранён:\n{result.text_path}"
-                        + (f"\nСубтитры:\n{result.srt_path}" if result.srt_path else ""),
+                        + (f"\nСубтитры:\n{result.srt_path}" if result.srt_path else "")
                     )
+                    self._notify_completion("Транскрибация завершена", body)
 
                 self.after(0, done)
             except TranscriptionCancelled:
