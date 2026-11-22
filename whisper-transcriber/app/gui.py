@@ -45,25 +45,24 @@ _SECONDARY_BTN = {
 
 _COPY_BTN_LABEL = "Скопировать результат"
 _COPIED_BTN_LABEL = "Скопировано"
-_ICON_PX = 26  # крупная иконка рядом с подписью кнопки
+# Как у текста CTkButton (тема: size 13) — иконка в одну высоту с буквами
+_ICON_PX = 13
 
 
 def _draw_copy_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
     """Два перекрывающихся листа — классическая иконка копирования."""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    stroke = max(3, size // 8)
-    radius = max(3, size // 9)
-    # Задний лист (почти во весь холст — без лишних полей)
+    stroke = max(2, round(size / 10))
+    radius = max(2, round(size / 10))
     draw.rounded_rectangle(
-        (size * 0.22, size * 0.04, size * 0.96, size * 0.78),
+        (size * 0.28, size * 0.06, size * 0.94, size * 0.72),
         radius=radius,
         outline=fill,
         width=stroke,
     )
-    # Передний лист
     draw.rounded_rectangle(
-        (size * 0.04, size * 0.22, size * 0.78, size * 0.96),
+        (size * 0.06, size * 0.28, size * 0.72, size * 0.94),
         radius=radius,
         outline=fill,
         width=stroke,
@@ -74,21 +73,21 @@ def _draw_copy_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
 def _draw_check_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    w = max(3, size // 7)
+    w = max(2, round(size / 8))
     points = [
-        (size * 0.12, size * 0.52),
-        (size * 0.40, size * 0.80),
-        (size * 0.90, size * 0.18),
+        (size * 0.14, size * 0.52),
+        (size * 0.40, size * 0.78),
+        (size * 0.88, size * 0.22),
     ]
     draw.line(points, fill=fill, width=w, joint="curve")
     return img
 
 
 def _make_btn_icon(kind: str = "copy") -> ctk.CTkImage:
-    """CTkImage с light/dark вариантами — иконка крупная и контрастная."""
-    master = _ICON_PX * 3  # рисуем в 3× для чёткости на Retina
-    light = (20, 20, 20, 255)
-    dark = (245, 245, 245, 255)
+    """CTkImage light/dark, размер = кегль текста кнопки."""
+    master = _ICON_PX * 4
+    light = (25, 25, 25, 255)
+    dark = (240, 240, 240, 255)
     drawer = _draw_copy_glyph if kind == "copy" else _draw_check_glyph
     return ctk.CTkImage(
         light_image=drawer(master, light),
@@ -322,8 +321,8 @@ class WhisperApp(ctk.CTk):
             text=_COPY_BTN_LABEL,
             image=self._copy_icon,
             compound="left",
-            width=240,
-            height=36,
+            width=220,
+            height=30,
             command=self._copy_result,
             state="disabled",
             **_SECONDARY_BTN,
