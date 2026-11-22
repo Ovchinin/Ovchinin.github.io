@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import subprocess
@@ -45,7 +44,6 @@ class TranscriptionResult:
     output_dir: Path
     text_path: Path
     srt_path: Path | None
-    meta_path: Path
     text: str
     duration_sec: float
     wall_sec: float
@@ -573,19 +571,6 @@ def transcribe_media(
             srt_path.write_text(segments_to_srt(collected), encoding="utf-8")
 
         wall_sec = time.time() - wall_start
-        meta = {
-            "source": str(source),
-            "model": settings.model_size,
-            "language": settings.language,
-            "device": device,
-            "duration_sec": total,
-            "wall_sec": wall_sec,
-            "segments": len(collected),
-            "text_file": str(text_path),
-            "srt_file": str(srt_path) if srt_path else None,
-        }
-        meta_path = output_dir / f"{stem}.meta.json"
-        meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
         if on_progress:
             on_progress(
@@ -605,7 +590,6 @@ def transcribe_media(
             output_dir=output_dir,
             text_path=text_path,
             srt_path=srt_path,
-            meta_path=meta_path,
             text=plain,
             duration_sec=total,
             wall_sec=wall_sec,

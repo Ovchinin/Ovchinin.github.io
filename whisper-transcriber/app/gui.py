@@ -220,7 +220,7 @@ class WhisperApp(ctk.CTk):
         body = ctk.CTkFrame(self)
         body.grid(row=3, column=0, sticky="nsew", padx=24, pady=(8, 20))
         body.grid_columnconfigure(0, weight=1)
-        body.grid_rowconfigure(3, weight=1)
+        body.grid_rowconfigure(4, weight=1)
 
         self.stage_label = ctk.CTkLabel(body, text="Ожидание файла", anchor="w")
         self.stage_label.grid(row=0, column=0, sticky="ew", padx=16, pady=(16, 4))
@@ -241,10 +241,36 @@ class WhisperApp(ctk.CTk):
         self.eta_label = ctk.CTkLabel(stats, text="Осталось: —")
         self.eta_label.grid(row=0, column=2, sticky="e")
 
+        result_header = ctk.CTkFrame(body, fg_color="transparent")
+        result_header.grid(row=3, column=0, sticky="ew", padx=16, pady=(12, 4))
+        result_header.grid_columnconfigure(0, weight=1)
+
+        self.result_title = ctk.CTkLabel(
+            result_header,
+            text="Результат работы",
+            anchor="w",
+            font=ctk.CTkFont(size=15, weight="bold"),
+        )
+        self.result_title.grid(row=0, column=0, sticky="w")
+
+        self.copy_btn = ctk.CTkButton(
+            result_header,
+            text="⎘  Скопировать результат",
+            width=200,
+            height=30,
+            fg_color=("gray75", "gray35"),
+            hover_color=("gray65", "gray45"),
+            text_color=("gray10", "gray90"),
+            command=self._copy_result,
+            state="disabled",
+        )
+        self.copy_btn.grid(row=0, column=1, sticky="e", padx=(8, 0))
+
         self.preview = ctk.CTkTextbox(body, wrap="word")
-        self.preview.grid(row=3, column=0, sticky="nsew", padx=16, pady=(8, 16))
+        self.preview.grid(row=4, column=0, sticky="nsew", padx=16, pady=(4, 16))
         self.preview.insert("1.0", "Здесь появится результат транскрибации.\n")
         self.preview.configure(state="disabled")
+        self._result_ready = False
 
     def _bootstrap_deps(self) -> None:
         status = check_dependencies()
@@ -386,11 +412,38 @@ class WhisperApp(ctk.CTk):
             self.install_btn.configure(state="normal")
             self.cancel_btn.configure(state="disabled")
 
-    def _set_preview(self, text: str) -> None:
+    def _set_preview(self, text: str, *, result_ready: bool | None = None) -> None:
         self.preview.configure(state="normal")
         self.preview.delete("1.0", "end")
         self.preview.insert("1.0", text)
         self.preview.configure(state="disabled")
+        if result_ready is not None:
+            self._result_ready = result_ready
+        self.copy_btn.configure(
+            state="normal" if self._result_ready else "disabled",
+            text="⎘  Скопировать результат",
+        )
+
+    def _copy_result(self) -> None:
+        if not self._result_ready:
+            return
+        text = self.preview.get("1.0", "end-1c")
+        if not text.strip():
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.update_idletasks()
+        except Exception as exc:
+            messagebox.showerror("Буфер обмена", f"Не удалось скопировать:\n{exc}", parent=self)
+            return
+        self.copy_btn.configure(text="✓  Скопировано")
+        self.after(
+            1800,
+            lambda: self.copy_btn.configure(text="⎘  Скопировать результат")
+            if self.winfo_exists()
+            else None,
+        )
 
     def _on_progress(self, update: ProgressUpdate) -> None:
         def apply() -> None:
@@ -498,7 +551,7 @@ class WhisperApp(ctk.CTk):
 
         self.cancel_event.clear()
         self._set_busy(True)
-        self._set_preview("Идёт транскрибация…\n")
+        self._set_preview("Идёт транскрибация…\n", result_ready=False)
         self.progress.set(0)
         settings_snapshot = AppSettings(
             output_dir=str(out),
@@ -521,7 +574,7 @@ class WhisperApp(ctk.CTk):
                 )
 
                 def done() -> None:
-                    self._set_preview(result.text)
+                    self._set_preview(result.text, result_ready=True)
                     self.stage_label.configure(
                         text=f"Готово → {result.text_path.name} "
                         f"({result.duration_sec:.0f} с аудио за {result.wall_sec:.0f} с)"
