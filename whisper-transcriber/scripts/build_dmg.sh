@@ -5,8 +5,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="${ROOT}/dist"
 APP_NAME="Транскрибация"
+# ASCII-имя DMG — надёжнее для GitHub Releases
+DMG_FILE="Transkribaciya.dmg"
 APP_DIR="${DIST}/${APP_NAME}.app"
-DMG_PATH="${DIST}/${APP_NAME}.dmg"
+DMG_PATH="${DIST}/${DMG_FILE}"
 STAGE="${DIST}/dmg-stage"
 
 echo "→ Иконки"
