@@ -72,8 +72,8 @@ def model_label_for_ui(name: str) -> str:
 
 
 def all_models_legend() -> str:
-    """Полный список подписей для всех моделей."""
-    lines = ["Все модели (вес → среднее скачивание при ~50 Мбит/с):"]
+    """Полный список подписей для всех моделей (для раскрывающегося блока)."""
+    lines = ["Вес → среднее скачивание при ~50 Мбит/с:"]
     for name in MODEL_ORDER:
         info = get_model_info(name)
         lines.append(

@@ -147,6 +147,19 @@ class WhisperApp(ctk.CTk):
         )
         self.model_hint.grid(row=3, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 2))
 
+        self._models_info_expanded = False
+        self.models_toggle_btn = ctk.CTkButton(
+            form,
+            text="▶ Больше информации о моделях",
+            anchor="w",
+            fg_color="transparent",
+            hover_color=("gray85", "gray25"),
+            text_color=("gray20", "gray90"),
+            height=28,
+            command=self._toggle_models_info,
+        )
+        self.models_toggle_btn.grid(row=4, column=1, columnspan=2, sticky="ew", padx=8, pady=(2, 2))
+
         self.models_legend = ctk.CTkLabel(
             form,
             text=all_models_legend(),
@@ -155,12 +168,12 @@ class WhisperApp(ctk.CTk):
             justify="left",
             wraplength=560,
         )
-        self.models_legend.grid(row=4, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 6))
+        # По умолчанию свёрнуто — не размещаем в grid
         self._refresh_model_hint()
 
         self.srt_var = tk.BooleanVar(value=self.settings.write_srt)
         ctk.CTkCheckBox(form, text="Также сохранить .srt (субтитры)", variable=self.srt_var).grid(
-            row=5, column=1, sticky="w", padx=8, pady=(6, 4)
+            row=6, column=1, sticky="w", padx=8, pady=(6, 4)
         )
 
         self.notify_var = tk.BooleanVar(value=self.settings.notify_on_complete)
@@ -169,11 +182,11 @@ class WhisperApp(ctk.CTk):
             text="Получить уведомление об окончании выполнения операции",
             variable=self.notify_var,
             command=self._persist_form_settings,
-        ).grid(row=6, column=1, sticky="w", padx=8, pady=(0, 12))
+        ).grid(row=7, column=1, sticky="w", padx=8, pady=(0, 12))
 
         # Actions
         actions = ctk.CTkFrame(form, fg_color="transparent")
-        actions.grid(row=7, column=0, columnspan=3, sticky="ew", padx=12, pady=(4, 14))
+        actions.grid(row=8, column=0, columnspan=3, sticky="ew", padx=12, pady=(4, 14))
         actions.grid_columnconfigure(0, weight=1)
 
         self.deps_label = ctk.CTkLabel(actions, text="Проверка зависимостей…", anchor="w")
@@ -315,6 +328,15 @@ class WhisperApp(ctk.CTk):
                 f"Сейчас: {status}."
             )
         )
+
+    def _toggle_models_info(self) -> None:
+        self._models_info_expanded = not self._models_info_expanded
+        if self._models_info_expanded:
+            self.models_toggle_btn.configure(text="▼ Больше информации о моделях")
+            self.models_legend.grid(row=5, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 6))
+        else:
+            self.models_toggle_btn.configure(text="▶ Больше информации о моделях")
+            self.models_legend.grid_remove()
 
     def _persist_form_settings(self) -> None:
         self.settings.output_dir = self.output_var.get().strip() or self.settings.output_dir
