@@ -18,7 +18,8 @@ from .ffmpeg_tools import (
     summarize_ffmpeg_error,
 )
 from .punctuation_ru import format_russian_transcript, segments_to_plain_text, segments_to_srt
-from .settings import AppSettings, app_support_dir
+from .models_info import download_status_message, is_model_cached, model_download_hint, models_dir
+from .settings import AppSettings
 
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".opus"}
 
@@ -196,12 +197,6 @@ _model_lock = threading.Lock()
 _model_cache: dict[tuple[str, str, str], object] = {}
 
 
-def _models_dir() -> Path:
-    path = app_support_dir() / "whisper-models"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
 def _start_heartbeat(
     on_progress: ProgressCallback | None,
     *,
@@ -209,6 +204,7 @@ def _start_heartbeat(
     percent: float,
     base_message: str,
     cancel_event: threading.Event | None = None,
+    message_fn=None,
 ) -> tuple[threading.Event, threading.Thread | None]:
     stop = threading.Event()
     if on_progress is None:
@@ -220,11 +216,12 @@ def _start_heartbeat(
             if cancel_event and cancel_event.is_set():
                 break
             elapsed = int(time.time() - started)
+            message = message_fn(elapsed) if message_fn else f"{base_message} ({elapsed} с)"
             on_progress(
                 ProgressUpdate(
                     stage=stage,
                     percent=percent,
-                    message=f"{base_message} ({elapsed} с — первый запуск может скачивать модель)",
+                    message=message,
                 )
             )
 
@@ -248,13 +245,37 @@ def get_model(
         if cached is not None:
             return cached
 
-        download_root = str(_models_dir())
+        download_root = str(models_dir())
+        cached_on_disk = is_model_cached(model_size)
+        if on_progress:
+            if cached_on_disk:
+                on_progress(
+                    ProgressUpdate(
+                        stage="model",
+                        percent=14.0,
+                        message=f"Загрузка модели «{model_size}» с диска…",
+                    )
+                )
+            else:
+                on_progress(
+                    ProgressUpdate(
+                        stage="model",
+                        percent=14.0,
+                        message=model_download_hint(model_size) + " Скачивание…",
+                    )
+                )
+
         stop, _thread = _start_heartbeat(
             on_progress,
             stage="model",
             percent=14.0,
             base_message=f"Загрузка модели Whisper ({model_size})",
             cancel_event=cancel_event,
+            message_fn=(
+                None
+                if cached_on_disk
+                else (lambda elapsed: download_status_message(model_size, elapsed))
+            ),
         )
         try:
             if cancel_event and cancel_event.is_set():
@@ -336,14 +357,15 @@ def transcribe_media(
         compute_type = _resolve_compute_type(device)
 
         if on_progress:
+            if is_model_cached(settings.model_size):
+                model_msg = f"Загрузка модели «{settings.model_size}» с диска…"
+            else:
+                model_msg = model_download_hint(settings.model_size) + " Скачивание…"
             on_progress(
                 ProgressUpdate(
                     stage="model",
                     percent=14.0,
-                    message=(
-                        f"Загрузка модели Whisper ({settings.model_size})… "
-                        "первый раз может скачиваться несколько минут"
-                    ),
+                    message=model_msg,
                     audio_total_sec=duration or None,
                 )
             )

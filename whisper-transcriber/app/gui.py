@@ -12,6 +12,12 @@ import customtkinter as ctk
 from . import __version__
 from .engine import ProgressUpdate, TranscriptionCancelled, transcribe_media
 from .installer import DependencyStatus, check_dependencies, ensure_dependencies
+from .models_info import (
+    format_size_gb,
+    get_model_info,
+    is_model_cached,
+    model_label_for_ui,
+)
 from .settings import AppSettings
 from .setup_dialog import ask_whisper_install_consent
 
@@ -22,6 +28,12 @@ VIDEO_TYPES = [
 ]
 
 MODEL_CHOICES = ["tiny", "base", "small", "medium", "large-v3"]
+MODEL_MENU_VALUES = [model_label_for_ui(name) for name in MODEL_CHOICES]
+
+
+def _model_name_from_menu(label: str) -> str:
+    name = (label or "").split(" — ", 1)[0].strip()
+    return name if name in MODEL_CHOICES else "small"
 
 
 def _fmt_eta(seconds: float | None) -> str:
@@ -105,19 +117,26 @@ class WhisperApp(ctk.CTk):
         )
 
         # Model / language
-        ctk.CTkLabel(form, text="Модель").grid(row=2, column=0, sticky="w", padx=12, pady=6)
-        self.model_var = tk.StringVar(value=self.settings.model_size)
-        ctk.CTkOptionMenu(form, values=MODEL_CHOICES, variable=self.model_var, width=160).grid(
-            row=2, column=1, sticky="w", padx=8, pady=6
-        )
-        ctk.CTkLabel(
+        ctk.CTkLabel(form, text="Модель").grid(row=2, column=0, sticky="nw", padx=12, pady=6)
+        initial_model = self.settings.model_size if self.settings.model_size in MODEL_CHOICES else "small"
+        self.model_var = tk.StringVar(value=model_label_for_ui(initial_model))
+        ctk.CTkOptionMenu(
             form,
-            text="small — быстрее; medium/large — точнее. Первый запуск модели скачивает её (это не зависание).",
+            values=MODEL_MENU_VALUES,
+            variable=self.model_var,
+            width=280,
+            command=lambda _v: self._refresh_model_hint(),
+        ).grid(row=2, column=1, sticky="w", padx=8, pady=6)
+        self.model_hint = ctk.CTkLabel(
+            form,
+            text="",
             text_color=("gray40", "gray65"),
             anchor="w",
             justify="left",
-            wraplength=480,
-        ).grid(row=3, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 4))
+            wraplength=520,
+        )
+        self.model_hint.grid(row=3, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 4))
+        self._refresh_model_hint()
 
         self.srt_var = tk.BooleanVar(value=self.settings.write_srt)
         ctk.CTkCheckBox(form, text="Также сохранить .srt (субтитры)", variable=self.srt_var).grid(
@@ -252,9 +271,26 @@ class WhisperApp(ctk.CTk):
         self.settings.output_dir = path
         self.settings.save()
 
+    def _selected_model(self) -> str:
+        return _model_name_from_menu(self.model_var.get())
+
+    def _refresh_model_hint(self) -> None:
+        name = self._selected_model()
+        info = get_model_info(name)
+        cached = is_model_cached(name)
+        status = "уже скачана на диск" if cached else "будет скачана при первом запуске"
+        self.model_hint.configure(
+            text=(
+                f"Вес: {format_size_gb(info.size_gb)}. "
+                f"Среднее время скачивания ≈ {info.avg_download_min:g} мин "
+                f"(обычно {info.eta_range} на ~50 Мбит/с). "
+                f"{info.quality_ru.capitalize()}. Сейчас: {status}."
+            )
+        )
+
     def _persist_form_settings(self) -> None:
         self.settings.output_dir = self.output_var.get().strip() or self.settings.output_dir
-        self.settings.model_size = self.model_var.get()
+        self.settings.model_size = self._selected_model()
         self.settings.write_srt = bool(self.srt_var.get())
         self.settings.language = "ru"
         self.settings.save()
@@ -313,7 +349,8 @@ class WhisperApp(ctk.CTk):
                             "Установка завершена",
                             "Whisper установлен из приложения и готов к работе.\n\n"
                             "Это бесплатно. При первой транскрибации один раз "
-                            "скачается модель распознавания.",
+                            "скачается выбранная модель — размер и среднее время "
+                            "скачивания показаны под списком моделей.",
                         ),
                     )
                     self.after(
@@ -362,6 +399,22 @@ class WhisperApp(ctk.CTk):
         if not status.ready:
             self._offer_install(status=status)
             return
+
+        model_name = self._selected_model()
+        if not is_model_cached(model_name):
+            info = get_model_info(model_name)
+            ok = messagebox.askyesno(
+                "Скачивание модели Whisper",
+                "Перед транскрибацией нужно один раз скачать модель.\n\n"
+                f"Модель: {info.name}\n"
+                f"Размер: {format_size_gb(info.size_gb)}\n"
+                f"Среднее время ожидания: ≈ {info.avg_download_min:g} мин "
+                f"(обычно {info.eta_range} при ~50 Мбит/с)\n\n"
+                f"{info.quality_ru.capitalize()}.\n\n"
+                "Скачать сейчас и продолжить?",
+            )
+            if not ok:
+                return
 
         self.cancel_event.clear()
         self._set_busy(True)
