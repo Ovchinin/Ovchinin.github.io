@@ -11,6 +11,10 @@ from typing import Callable
 
 ProgressCallback = Callable[[str, float], None]
 
+# faster-whisper → onnxruntime: колёс для 3.14 пока нет
+MIN_PY = (3, 10)
+MAX_PY = (3, 13)
+
 
 @dataclass
 class DependencyStatus:
@@ -33,11 +37,27 @@ def find_ffmpeg() -> str | None:
     return shutil.which("ffmpeg")
 
 
+def python_supported(info: tuple[int, int] | None = None) -> bool:
+    major_minor = info or sys.version_info[:2]
+    return MIN_PY <= major_minor <= MAX_PY
+
+
+def python_requirement_message() -> str:
+    current = sys.version.split()[0]
+    return (
+        f"Для Whisper нужен Python 3.10–3.13 (лучше 3.12). Сейчас: {current}.\n\n"
+        "Python 3.14 пока не поддерживается: нет пакета onnxruntime.\n\n"
+        "Установите Python 3.12 с https://www.python.org/downloads/macos/\n"
+        "затем полностью закройте «Транскрибация» и откройте снова — "
+        "окружение пересоздастся автоматически."
+    )
+
+
 def check_dependencies() -> DependencyStatus:
     details: list[str] = []
-    python_ok = sys.version_info >= (3, 9)
+    python_ok = python_supported()
     if not python_ok:
-        details.append(f"Нужен Python 3.9+, сейчас {sys.version.split()[0]}")
+        details.append(python_requirement_message().split("\n")[0])
     else:
         details.append(f"Python {sys.version.split()[0]} — ок")
 
@@ -64,6 +84,17 @@ def _run(cmd: list[str], on_progress: ProgressCallback | None = None, label: str
     env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
     proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if proc.returncode != 0:
+        err = (proc.stderr or "") + "\n" + (proc.stdout or "")
+        if "onnxruntime" in err.lower() and not python_supported():
+            raise RuntimeError(python_requirement_message())
+        if "onnxruntime" in err.lower():
+            raise RuntimeError(
+                "Не удалось установить onnxruntime (нужен для Whisper).\n\n"
+                "Чаще всего помогает Python 3.12 вместо 3.14.\n"
+                "Установите 3.12 с https://www.python.org/downloads/macos/ "
+                "и перезапустите приложение.\n\n"
+                f"Детали:\n{err[-2500:]}"
+            )
         raise RuntimeError(
             f"Команда не удалась: {' '.join(cmd)}\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
         )
@@ -82,6 +113,9 @@ def install_ffmpeg_mac(on_progress: ProgressCallback | None = None) -> None:
 
 
 def install_python_packages(on_progress: ProgressCallback | None = None) -> None:
+    if not python_supported():
+        raise RuntimeError(python_requirement_message())
+
     req = os.path.join(os.path.dirname(os.path.dirname(__file__)), "requirements.txt")
     if on_progress:
         on_progress("Установка Python-пакетов (faster-whisper)…", 0.4)
@@ -110,7 +144,7 @@ def ensure_dependencies(
         return status
 
     if not status.python_ok:
-        raise RuntimeError("Обновите Python до 3.9 или новее.")
+        raise RuntimeError(python_requirement_message())
 
     if not status.whisper_ok:
         install_python_packages(on_progress)

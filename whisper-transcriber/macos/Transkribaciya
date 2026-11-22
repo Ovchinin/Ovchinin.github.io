@@ -1,5 +1,6 @@
 #!/bin/bash
 # Лаунчер .app «Транскрибация»: своё venv в Application Support, GUI из Resources.
+# Whisper/onnxruntime пока не поддерживают Python 3.14 — берём 3.10–3.13.
 set -euo pipefail
 
 APP_NAME="Транскрибация"
@@ -11,35 +12,98 @@ mkdir -p "${SUPPORT}" "${LOG_DIR}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RESOURCES="${ROOT}/Resources"
 APP_SRC="${RESOURCES}/app_src"
-REQ="${APP_SRC}/requirements.txt"
 
 export PYTHONUTF8=1
 export LANG="${LANG:-ru_RU.UTF-8}"
 
+python_major_minor() {
+  "$1" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null || true
+}
+
+python_is_supported() {
+  local bin="$1"
+  [[ -x "$bin" ]] || return 1
+  "$bin" - <<'PY' 2>/dev/null
+import sys
+raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 13) else 1)
+PY
+}
+
 find_python() {
-  if [[ -n "${TRANSKRIBACIYA_PYTHON:-}" && -x "${TRANSKRIBACIYA_PYTHON}" ]]; then
+  if [[ -n "${TRANSKRIBACIYA_PYTHON:-}" ]] && python_is_supported "${TRANSKRIBACIYA_PYTHON}"; then
     echo "${TRANSKRIBACIYA_PYTHON}"
     return
   fi
-  for c in \
-    "/usr/local/bin/python3" \
-    "/opt/homebrew/bin/python3" \
-    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3" \
-    "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3" \
-    "/usr/bin/python3"
-  do
-    if [[ -x "$c" ]]; then
+
+  local candidates=(
+    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12"
+    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+    "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11"
+    "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+    "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13"
+    "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+    "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3.10"
+    "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3"
+    "/opt/homebrew/bin/python3.12"
+    "/opt/homebrew/bin/python3.11"
+    "/opt/homebrew/bin/python3.13"
+    "/opt/homebrew/bin/python3.10"
+    "/usr/local/bin/python3.12"
+    "/usr/local/bin/python3.11"
+    "/usr/local/bin/python3.13"
+    "/usr/local/bin/python3.10"
+    "/opt/homebrew/bin/python3"
+    "/usr/local/bin/python3"
+  )
+
+  local c ver
+  for c in "${candidates[@]}"; do
+    if python_is_supported "$c"; then
       echo "$c"
       return
     fi
   done
-  osascript -e "display dialog \"Не найден Python 3. Установите Python 3.10+ с python.org, затем снова откройте «Транскрибация».\" buttons {\"OK\"} default button 1 with title \"Транскрибация\""
+
+  # Последняя попытка: любой python3 в PATH, если версия подходящая
+  if command -v python3 >/dev/null 2>&1 && python_is_supported "$(command -v python3)"; then
+    command -v python3
+    return
+  fi
+
+  local found_ver=""
+  if command -v python3 >/dev/null 2>&1; then
+    found_ver="$(python_major_minor "$(command -v python3)")"
+  fi
+
+  osascript <<EOF
+display dialog "Для «Транскрибация» нужен Python 3.10–3.13 (рекомендуется 3.12).
+
+Сейчас: ${found_ver:-не найден}.
+Python 3.14 пока не подходит — пакет onnxruntime для Whisper на нём недоступен.
+
+1) Скачайте Python 3.12 с https://www.python.org/downloads/macos/
+2) Установите его
+3) Снова откройте «Транскрибация»
+
+Приложение само пересоздаст окружение." buttons {"OK"} default button 1 with title "Транскрибация"
+EOF
   exit 1
 }
 
 PYTHON_BIN="$(find_python)"
+PY_VER="$(python_major_minor "${PYTHON_BIN}")"
 
+# Если venv от несовместимого Python (например 3.14) — пересоздаём
+NEED_VENV=0
 if [[ ! -x "${VENV}/bin/python" ]]; then
+  NEED_VENV=1
+elif ! python_is_supported "${VENV}/bin/python"; then
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) recreating venv; old=$(python_major_minor "${VENV}/bin/python"); new=${PY_VER}" >>"${LOG_DIR}/launcher.log"
+  rm -rf "${VENV}"
+  NEED_VENV=1
+fi
+
+if [[ "${NEED_VENV}" -eq 1 ]]; then
   "${PYTHON_BIN}" -m venv "${VENV}"
 fi
 
