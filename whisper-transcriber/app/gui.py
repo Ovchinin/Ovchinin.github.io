@@ -11,8 +11,9 @@ import customtkinter as ctk
 
 from . import __version__
 from .engine import ProgressUpdate, TranscriptionCancelled, transcribe_media
-from .installer import check_dependencies, ensure_dependencies
+from .installer import DependencyStatus, check_dependencies, ensure_dependencies
 from .settings import AppSettings
+from .setup_dialog import ask_whisper_install_consent
 
 
 VIDEO_TYPES = [
@@ -124,7 +125,10 @@ class WhisperApp(ctk.CTk):
         self.deps_label.grid(row=0, column=0, sticky="w")
 
         self.install_btn = ctk.CTkButton(
-            actions, text="Установить Whisper", width=160, command=self._install_deps
+            actions,
+            text="Установить Whisper",
+            width=160,
+            command=self._offer_install,
         )
         self.install_btn.grid(row=0, column=1, padx=6)
         self.install_btn.grid_remove()
@@ -177,21 +181,52 @@ class WhisperApp(ctk.CTk):
     def _bootstrap_deps(self) -> None:
         status = check_dependencies()
         self._apply_deps_status(status)
+        if not status.ready:
+            # Первый запуск / нет Whisper: объяснить, что это бесплатно, и спросить согласие
+            self.after(100, lambda: self._offer_install(status=status, auto_prompt=True))
 
-    def _apply_deps_status(self, status) -> None:
+    def _apply_deps_status(self, status: DependencyStatus) -> None:
         if status.ready:
-            self.deps_label.configure(text="Whisper и ffmpeg готовы")
+            self.deps_label.configure(text="Whisper и ffmpeg готовы к работе")
             self.install_btn.grid_remove()
             self.start_btn.configure(state="normal")
         else:
             missing = []
+            if not status.whisper_ok:
+                missing.append("Whisper")
             if not status.ffmpeg_ok:
                 missing.append("ffmpeg")
-            if not status.whisper_ok:
-                missing.append("faster-whisper")
-            self.deps_label.configure(text="Нужно установить: " + ", ".join(missing))
+            self.deps_label.configure(
+                text="Для работы нужно установить: " + ", ".join(missing) + " (бесплатно)"
+            )
             self.install_btn.grid()
             self.start_btn.configure(state="disabled")
+
+    def _offer_install(
+        self,
+        status: DependencyStatus | None = None,
+        auto_prompt: bool = False,
+    ) -> None:
+        """Показать согласие и при «Да» установить Whisper из приложения."""
+        if self.worker and self.worker.is_alive():
+            return
+        status = status or check_dependencies()
+        if status.ready:
+            self._apply_deps_status(status)
+            if not auto_prompt:
+                messagebox.showinfo("Готово", "Whisper уже установлен и готов к работе.")
+            return
+
+        consented = ask_whisper_install_consent(self, status)
+        if not consented:
+            self.deps_label.configure(
+                text="Установка отложена. Нажмите «Установить Whisper», когда будете готовы."
+            )
+            self.install_btn.grid()
+            self.start_btn.configure(state="disabled")
+            return
+
+        self._install_deps()
 
     def _pick_source(self) -> None:
         path = filedialog.askopenfilename(title="Выберите видео или аудио", filetypes=VIDEO_TYPES)
@@ -217,9 +252,15 @@ class WhisperApp(ctk.CTk):
         self.settings.save()
 
     def _set_busy(self, busy: bool) -> None:
-        self.start_btn.configure(state="disabled" if busy else "normal")
-        self.cancel_btn.configure(state="normal" if busy else "disabled")
-        self.install_btn.configure(state="disabled" if busy else "normal")
+        ready = check_dependencies().ready
+        if busy:
+            self.start_btn.configure(state="disabled")
+            self.install_btn.configure(state="disabled")
+            self.cancel_btn.configure(state="normal")
+        else:
+            self.start_btn.configure(state="normal" if ready else "disabled")
+            self.install_btn.configure(state="normal")
+            self.cancel_btn.configure(state="disabled")
 
     def _set_preview(self, text: str) -> None:
         self.preview.configure(state="normal")
@@ -238,9 +279,15 @@ class WhisperApp(ctk.CTk):
         self.after(0, apply)
 
     def _install_deps(self) -> None:
+        """Установка Whisper/ffmpeg из приложения после согласия пользователя."""
         self._set_busy(True)
-        self.stage_label.configure(text="Установка зависимостей…")
+        self.deps_label.configure(text="Идёт автоматическая установка…")
+        self.stage_label.configure(text="Установка Whisper (бесплатно, из приложения)…")
         self.progress.set(0.05)
+        self._set_preview(
+            "Устанавливаем Whisper и необходимые компоненты.\n"
+            "Это бесплатно. Подождите — прогресс отображается выше.\n"
+        )
 
         def work() -> None:
             try:
@@ -255,24 +302,40 @@ class WhisperApp(ctk.CTk):
                     self.after(
                         0,
                         lambda: messagebox.showinfo(
-                            "Готово",
-                            "Whisper установлен. При первой транскрибации скачается модель.",
+                            "Установка завершена",
+                            "Whisper установлен из приложения и готов к работе.\n\n"
+                            "Это бесплатно. При первой транскрибации один раз "
+                            "скачается модель распознавания.",
+                        ),
+                    )
+                    self.after(
+                        0,
+                        lambda: self._set_preview(
+                            "Whisper установлен. Выберите видео и нажмите «Транскрибировать».\n"
                         ),
                     )
                 else:
                     self.after(
                         0,
                         lambda: messagebox.showerror(
-                            "Зависимости",
-                            "Не всё установилось:\n" + "\n".join(status.details),
+                            "Установка не завершена",
+                            "Приложение не смогло установить всё автоматически.\n\n"
+                            + "\n".join(status.details),
                         ),
                     )
             except Exception as exc:
                 self.after(0, lambda: messagebox.showerror("Установка", str(exc)))
+                self.after(
+                    0,
+                    lambda: self.deps_label.configure(
+                        text="Установка не удалась — нажмите «Установить Whisper» ещё раз"
+                    ),
+                )
             finally:
                 self.after(0, lambda: self._set_busy(False))
 
-        threading.Thread(target=work, daemon=True).start()
+        self.worker = threading.Thread(target=work, daemon=True)
+        self.worker.start()
 
     def _start(self) -> None:
         if not self.source_path or not self.source_path.exists():
@@ -289,11 +352,7 @@ class WhisperApp(ctk.CTk):
 
         status = check_dependencies()
         if not status.ready:
-            if messagebox.askyesno(
-                "Зависимости",
-                "Whisper или ffmpeg ещё не готовы. Установить сейчас?",
-            ):
-                self._install_deps()
+            self._offer_install(status=status)
             return
 
         self.cancel_event.clear()

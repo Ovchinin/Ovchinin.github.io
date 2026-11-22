@@ -23,17 +23,9 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
+# Минимально для старта GUI; Whisper/ffmpeg приложение поставит само после согласия
 python -m pip install --upgrade pip >/dev/null
-python -m pip install -r requirements.txt
+python -m pip install "customtkinter>=5.2.2" "Pillow>=10.0.0" >/dev/null
 
-if ! command -v ffmpeg >/dev/null 2>&1; then
-  if command -v brew >/dev/null 2>&1; then
-    echo "→ Устанавливаю ffmpeg через Homebrew…"
-    brew install ffmpeg
-  else
-    echo "⚠ ffmpeg не найден. Установите Homebrew (https://brew.sh), затем: brew install ffmpeg"
-    echo "  Приложение всё равно откроется — можно нажать «Установить Whisper» в UI."
-  fi
-fi
-
+echo "→ Открываю приложение. Если Whisper ещё не установлен — оно само предложит бесплатную установку."
 exec python main.py "$@"
