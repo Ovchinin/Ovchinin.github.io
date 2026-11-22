@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="${ROOT}/dist"
 APP_NAME="Транскрибация"
 # ASCII-имя DMG — надёжнее для GitHub Releases
-DMG_FILE="Transkribaciya.dmg"
+DMG_FILE="transcription.dmg"
 APP_DIR="${DIST}/${APP_NAME}.app"
 DMG_PATH="${DIST}/${DMG_FILE}"
 STAGE="${DIST}/dmg-stage"

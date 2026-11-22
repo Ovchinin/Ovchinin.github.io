@@ -34,18 +34,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Transkribaciya-dmg
-          path: whisper-transcriber/dist/Transkribaciya.dmg
+          path: whisper-transcriber/dist/transcription.dmg
 
       - name: Publish GitHub Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: whisper-transcriber/dist/Transkribaciya.dmg
+          files: whisper-transcriber/dist/transcription.dmg
           name: Транскрибация ${{ github.ref_name }}
           body: |
             Установщик macOS (`.dmg`), без App Store.
 
-            1. Скачайте `Transkribaciya.dmg`
+            1. Скачайте `transcription.dmg`
             2. Откройте и перетащите **Транскрибация** в **Applications**
             3. Запустите из Launchpad / Applications (можно вынести иконку на рабочий стол)
             4. При первом запуске подтвердите бесплатную установку Whisper из приложения

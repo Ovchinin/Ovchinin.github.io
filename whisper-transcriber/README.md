@@ -8,7 +8,7 @@ macOS-приложение: **видео → читаемый русский т�
 ## Скачать и установить (DMG)
 
 1. Откройте [Releases](https://github.com/Ovchinin/Transcription/releases/tag/v1.0.1) репозитория **Transcription**  
-2. Скачайте **`Transkribaciya.dmg`**  
+2. Скачайте **`transcription.dmg`**  
 3. Откройте DMG и перетащите **Транскрибация** в папку **Applications**  
 4. Запустите из Applications / Launchpad  
 5. При желании перетащите иконку из Applications на **рабочий стол** или в Dock  
