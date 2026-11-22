@@ -20,10 +20,17 @@ class FfmpegToolsTests(unittest.TestCase):
             "Stream #0:0: Video: h264\n"
             "Stream #0:1(und): Audio: aac, 48000 Hz, stereo\n"
         )
-        video_only = "Stream #0:0(und): Video: h264 (Main) (avc1 / 0x31637661)\n"
+        # Типичный вывод macOS/QuickTime с [0xN]
+        with_audio_bracket = (
+            "Stream #0:0[0x1](und): Video: h264 (Main) (avc1 / 0x31637661)\n"
+            "Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo\n"
+        )
+        video_only = "Stream #0:0[0x1](und): Video: h264 (Main) (avc1 / 0x31637661)\n"
         with mock.patch("app.ffmpeg_tools.subprocess.run") as run:
             run.return_value = mock.Mock(stderr=with_audio, stdout="", returncode=1)
             self.assertTrue(has_audio_stream(Path("a.mov"), ffmpeg="/usr/bin/ffmpeg"))
+            run.return_value = mock.Mock(stderr=with_audio_bracket, stdout="", returncode=1)
+            self.assertTrue(has_audio_stream(Path("b.mov"), ffmpeg="/usr/bin/ffmpeg"))
             run.return_value = mock.Mock(stderr=video_only, stdout="", returncode=1)
             self.assertFalse(has_audio_stream(Path("v.mov"), ffmpeg="/usr/bin/ffmpeg"))
 

@@ -15,6 +15,7 @@ from .ffmpeg_tools import (
     find_ffmpeg,
     has_audio_stream,
     media_duration_sec,
+    probe_suggests_no_audio,
     summarize_ffmpeg_error,
 )
 from .punctuation_ru import format_russian_transcript, segments_to_plain_text, segments_to_srt
@@ -69,7 +70,9 @@ def extract_audio(
             "ffmpeg скачается автоматически, Homebrew не нужен."
         )
 
-    if not has_audio_stream(source, ffmpeg):
+    # Блокируем заранее только если probe явно показывает видео без Audio.
+    # Иначе пробуем извлечь (старый regex ломался на Stream #0:1[0x2](und): Audio:).
+    if probe_suggests_no_audio(source, ffmpeg):
         raise RuntimeError(
             "В этом файле нет звуковой дорожки — транскрибировать нечего.\n\n"
             "Частая причина: запись экрана без микрофона / без «звук с Mac».\n"
@@ -77,27 +80,6 @@ def extract_audio(
         )
 
     duration = media_duration_sec(source, ffmpeg)
-    # Явно берём только аудио; видео не декодируем (важно для длинных 4K/60fps роликов).
-    cmd = [
-        ffmpeg,
-        "-hide_banner",
-        "-nostdin",
-        "-y",
-        "-i",
-        str(source),
-        "-map",
-        "0:a:0",
-        "-vn",
-        "-sn",
-        "-dn",
-        "-ac",
-        "1",
-        "-ar",
-        "16000",
-        "-c:a",
-        "pcm_s16le",
-        str(dest_wav),
-    ]
     if on_progress:
         on_progress(
             ProgressUpdate(
@@ -108,55 +90,79 @@ def extract_audio(
             )
         )
 
-    proc = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+    # Несколько стратегий map: разные контейнеры/дорожки QuickTime
+    map_strategies = (
+        ["-map", "0:a:0"],
+        ["-map", "0:a"],
+        [],  # пусть ffmpeg сам выберет аудио при -vn
     )
-    assert proc.stderr is not None
-    # ffmpeg пишет прогресс в stderr; для больших файлов просто ждём
-    while True:
-        if cancel_event and cancel_event.is_set():
-            proc.kill()
-            raise TranscriptionCancelled()
-        ret = proc.poll()
-        if ret is not None:
-            err = proc.stderr.read()
-            if ret != 0:
-                detail = summarize_ffmpeg_error(err)
-                if _looks_like_missing_audio(detail) or _looks_like_missing_audio(err):
-                    raise RuntimeError(
-                        "В этом файле нет звуковой дорожки — транскрибировать нечего.\n\n"
-                        "Запишите ролик со звуком или выберите файл с аудидорожкой."
-                    )
-                raise RuntimeError(
-                    "Не удалось извлечь звук из файла.\n\n"
-                    f"{detail}"
-                )
-            break
-        time.sleep(0.2)
-        if on_progress and duration > 0:
-            # Грубая оценка: пока идёт извлечение — держим 2–12%
-            on_progress(
-                ProgressUpdate(
-                    stage="extract",
-                    percent=8.0,
-                    message="Извлечение аудиодорожки…",
-                    audio_total_sec=duration,
-                )
-            )
-
-    if on_progress:
-        on_progress(
-            ProgressUpdate(
-                stage="extract",
-                percent=12.0,
-                message="Аудио готово, загрузка модели Whisper…",
-                audio_total_sec=duration or None,
-            )
+    last_err = ""
+    for maps in map_strategies:
+        cmd = [
+            ffmpeg,
+            "-hide_banner",
+            "-nostdin",
+            "-y",
+            "-i",
+            str(source),
+            *maps,
+            "-vn",
+            "-sn",
+            "-dn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "pcm_s16le",
+            str(dest_wav),
+        ]
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
-    return duration or media_duration_sec(dest_wav, ffmpeg)
+        assert proc.stderr is not None
+        while True:
+            if cancel_event and cancel_event.is_set():
+                proc.kill()
+                raise TranscriptionCancelled()
+            ret = proc.poll()
+            if ret is not None:
+                err = proc.stderr.read()
+                if ret == 0 and dest_wav.exists() and dest_wav.stat().st_size > 0:
+                    if on_progress:
+                        on_progress(
+                            ProgressUpdate(
+                                stage="extract",
+                                percent=12.0,
+                                message="Аудио готово, загрузка модели Whisper…",
+                                audio_total_sec=duration or None,
+                            )
+                        )
+                    return duration or media_duration_sec(dest_wav, ffmpeg)
+                last_err = err
+                break
+            time.sleep(0.2)
+            if on_progress and duration > 0:
+                on_progress(
+                    ProgressUpdate(
+                        stage="extract",
+                        percent=8.0,
+                        message="Извлечение аудиодорожки…",
+                        audio_total_sec=duration,
+                    )
+                )
+
+    detail = summarize_ffmpeg_error(last_err)
+    if _looks_like_missing_audio(detail) or _looks_like_missing_audio(last_err):
+        raise RuntimeError(
+            "В этом файле нет звуковой дорожки — транскрибировать нечего.\n\n"
+            "Частая причина: запись экрана без микрофона / без «звук с Mac».\n"
+            "Запишите ролик со звуком или выберите другое видео/аудио."
+        )
+    raise RuntimeError(f"Не удалось извлечь звук из файла.\n\n{detail}")
 
 
 def _looks_like_missing_audio(text: str) -> bool:

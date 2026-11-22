@@ -134,7 +134,12 @@ def ensure_ffmpeg(on_progress=None) -> str:
     )
 
 
-_AUDIO_STREAM_RE = re.compile(r"Stream #\d+:\d+(?:\([^)]*\))?: Audio:", re.IGNORECASE)
+# ffmpeg пишет так: Stream #0:1[0x2](und): Audio: aac ...
+_AUDIO_STREAM_RE = re.compile(
+    r"Stream\s+#\d+:\d+(?:\[[^\]]*\])?(?:\([^)]*\))?:\s*Audio\b",
+    re.IGNORECASE,
+)
+_AUDIO_ANY_RE = re.compile(r"Stream\s+#.*\bAudio\b", re.IGNORECASE)
 _DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)")
 
 
@@ -162,7 +167,18 @@ def media_duration_sec(media: Path, ffmpeg: str | None = None) -> float:
 
 def has_audio_stream(media: Path, ffmpeg: str | None = None) -> bool:
     """Есть ли в файле хотя бы одна аудидорожка."""
-    return _AUDIO_STREAM_RE.search(_ffmpeg_probe_text(media, ffmpeg)) is not None
+    text = _ffmpeg_probe_text(media, ffmpeg)
+    return bool(_AUDIO_STREAM_RE.search(text) or _AUDIO_ANY_RE.search(text))
+
+
+def probe_suggests_no_audio(media: Path, ffmpeg: str | None = None) -> bool:
+    """True только если в probe явно есть видеопотоки и ни одной Audio-строки."""
+    text = _ffmpeg_probe_text(media, ffmpeg)
+    if not text.strip():
+        return False  # неизвестно — не блокируем
+    has_audio = bool(_AUDIO_STREAM_RE.search(text) or _AUDIO_ANY_RE.search(text))
+    has_video = bool(re.search(r"Stream\s+#.*\bVideo\b", text, re.I))
+    return has_video and not has_audio
 
 
 def summarize_ffmpeg_error(stderr: str) -> str:
