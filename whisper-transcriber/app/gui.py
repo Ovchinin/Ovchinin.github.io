@@ -34,6 +34,14 @@ VIDEO_TYPES = [
 MODEL_CHOICES = list(MODEL_ORDER)
 MODEL_MENU_VALUES = [model_label_for_ui(name) for name in MODEL_CHOICES]
 
+# Вторичные кнопки: серый фон + читаемый disabled-текст (дефолт CTk сливается с серым)
+_SECONDARY_BTN = {
+    "fg_color": ("gray78", "gray32"),
+    "hover_color": ("gray68", "gray40"),
+    "text_color": ("gray15", "gray92"),
+    "text_color_disabled": ("gray40", "gray70"),
+}
+
 
 def _model_name_from_menu(label: str) -> str:
     name = (label or "").split(" — ", 1)[0].strip()
@@ -210,9 +218,9 @@ class WhisperApp(ctk.CTk):
             actions,
             text="Отмена",
             width=100,
-            fg_color=("gray70", "gray35"),
             command=self._cancel,
             state="disabled",
+            **_SECONDARY_BTN,
         )
         self.cancel_btn.grid(row=0, column=3, padx=(6, 0))
 
@@ -258,11 +266,9 @@ class WhisperApp(ctk.CTk):
             text="⎘  Скопировать результат",
             width=200,
             height=30,
-            fg_color=("gray75", "gray35"),
-            hover_color=("gray65", "gray45"),
-            text_color=("gray10", "gray90"),
             command=self._copy_result,
             state="disabled",
+            **_SECONDARY_BTN,
         )
         self.copy_btn.grid(row=0, column=1, sticky="e", padx=(8, 0))
 
