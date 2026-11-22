@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from app.ffmpeg_tools import media_duration_sec
+from app.ffmpeg_tools import has_audio_stream, media_duration_sec, summarize_ffmpeg_error
 
 
 class FfmpegToolsTests(unittest.TestCase):
@@ -14,6 +14,24 @@ class FfmpegToolsTests(unittest.TestCase):
             run.return_value = mock.Mock(stderr=stderr, stdout="", returncode=1)
             seconds = media_duration_sec(Path("clip.mp4"), ffmpeg="/usr/bin/ffmpeg")
         self.assertAlmostEqual(seconds, 3723.5)
+
+    def test_has_audio_stream_true_and_false(self) -> None:
+        with_audio = (
+            "Stream #0:0: Video: h264\n"
+            "Stream #0:1(und): Audio: aac, 48000 Hz, stereo\n"
+        )
+        video_only = "Stream #0:0(und): Video: h264 (Main) (avc1 / 0x31637661)\n"
+        with mock.patch("app.ffmpeg_tools.subprocess.run") as run:
+            run.return_value = mock.Mock(stderr=with_audio, stdout="", returncode=1)
+            self.assertTrue(has_audio_stream(Path("a.mov"), ffmpeg="/usr/bin/ffmpeg"))
+            run.return_value = mock.Mock(stderr=video_only, stdout="", returncode=1)
+            self.assertFalse(has_audio_stream(Path("v.mov"), ffmpeg="/usr/bin/ffmpeg"))
+
+    def test_summarize_keeps_error_lines(self) -> None:
+        text = "ffmpeg version 9\nconfiguration: --foo\nOutput file #0 does not contain any stream\n"
+        summary = summarize_ffmpeg_error(text)
+        self.assertIn("does not contain any stream", summary)
+        self.assertNotIn("configuration", summary)
 
 
 if __name__ == "__main__":

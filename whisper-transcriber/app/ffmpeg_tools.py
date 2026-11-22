@@ -134,19 +134,49 @@ def ensure_ffmpeg(on_progress=None) -> str:
     )
 
 
-def media_duration_sec(media: Path, ffmpeg: str | None = None) -> float:
-    """Длительность через ffmpeg -i (ffprobe не требуется)."""
+_AUDIO_STREAM_RE = re.compile(r"Stream #\d+:\d+(?:\([^)]*\))?: Audio:", re.IGNORECASE)
+_DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)")
+
+
+def _ffmpeg_probe_text(media: Path, ffmpeg: str | None = None) -> str:
     exe = ffmpeg or find_ffmpeg()
     if not exe:
-        return 0.0
+        return ""
     proc = subprocess.run(
         [exe, "-hide_banner", "-i", str(media)],
         capture_output=True,
         text=True,
     )
-    text = (proc.stderr or "") + "\n" + (proc.stdout or "")
-    match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", text)
+    return (proc.stderr or "") + "\n" + (proc.stdout or "")
+
+
+def media_duration_sec(media: Path, ffmpeg: str | None = None) -> float:
+    """Длительность через ffmpeg -i (ffprobe не требуется)."""
+    text = _ffmpeg_probe_text(media, ffmpeg)
+    match = _DURATION_RE.search(text)
     if not match:
         return 0.0
     hours, minutes, seconds = match.groups()
     return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+
+
+def has_audio_stream(media: Path, ffmpeg: str | None = None) -> bool:
+    """Есть ли в файле хотя бы одна аудидорожка."""
+    return _AUDIO_STREAM_RE.search(_ffmpeg_probe_text(media, ffmpeg)) is not None
+
+
+def summarize_ffmpeg_error(stderr: str) -> str:
+    """Вытащить суть ошибки ffmpeg, а не весь баннер сборки."""
+    lines = [ln.strip() for ln in (stderr or "").splitlines() if ln.strip()]
+    interesting = [
+        ln
+        for ln in lines
+        if re.search(
+            r"error|does not contain any stream|invalid|failed|no such|permission|not found|unknown",
+            ln,
+            re.I,
+        )
+    ]
+    if interesting:
+        return "\n".join(interesting[-12:])
+    return "\n".join(lines[-20:]) if lines else "неизвестная ошибка ffmpeg"

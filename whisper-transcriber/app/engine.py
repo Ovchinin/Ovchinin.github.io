@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -10,7 +11,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from .ffmpeg_tools import find_ffmpeg, media_duration_sec
+from .ffmpeg_tools import (
+    find_ffmpeg,
+    has_audio_stream,
+    media_duration_sec,
+    summarize_ffmpeg_error,
+)
 from .punctuation_ru import format_russian_transcript, segments_to_plain_text, segments_to_srt
 from .settings import AppSettings
 
@@ -60,13 +66,27 @@ def extract_audio(
             "ffmpeg скачается автоматически, Homebrew не нужен."
         )
 
+    if not has_audio_stream(source, ffmpeg):
+        raise RuntimeError(
+            "В этом файле нет звуковой дорожки — транскрибировать нечего.\n\n"
+            "Частая причина: запись экрана без микрофона / без «звук с Mac».\n"
+            "Запишите ролик со звуком или выберите другое видео/аудио."
+        )
+
     duration = media_duration_sec(source, ffmpeg)
+    # Явно берём только аудио; видео не декодируем (важно для длинных 4K/60fps роликов).
     cmd = [
         ffmpeg,
+        "-hide_banner",
+        "-nostdin",
         "-y",
         "-i",
         str(source),
+        "-map",
+        "0:a:0",
         "-vn",
+        "-sn",
+        "-dn",
         "-ac",
         "1",
         "-ar",
@@ -101,7 +121,16 @@ def extract_audio(
         if ret is not None:
             err = proc.stderr.read()
             if ret != 0:
-                raise RuntimeError(f"ffmpeg не смог извлечь аудио:\n{err[-3000:]}")
+                detail = summarize_ffmpeg_error(err)
+                if _looks_like_missing_audio(detail) or _looks_like_missing_audio(err):
+                    raise RuntimeError(
+                        "В этом файле нет звуковой дорожки — транскрибировать нечего.\n\n"
+                        "Запишите ролик со звуком или выберите файл с аудидорожкой."
+                    )
+                raise RuntimeError(
+                    "Не удалось извлечь звук из файла.\n\n"
+                    f"{detail}"
+                )
             break
         time.sleep(0.2)
         if on_progress and duration > 0:
@@ -125,6 +154,16 @@ def extract_audio(
             )
         )
     return duration or media_duration_sec(dest_wav, ffmpeg)
+
+
+def _looks_like_missing_audio(text: str) -> bool:
+    return bool(
+        re.search(
+            r"does not contain any stream|Output file does not contain|matches no streams",
+            text or "",
+            re.I,
+        )
+    )
 
 
 def _resolve_device(preference: str) -> str:
