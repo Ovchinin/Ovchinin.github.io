@@ -3,6 +3,7 @@ from __future__ import annotations
 import customtkinter as ctk
 
 from .installer import DependencyStatus
+from .theme import COLOR, PRIMARY_BTN, SECONDARY_BTN, F, apply_appearance
 
 
 WHISPER_CONSENT_TEXT = """Для работы «Транскрибация» нужно установить Whisper и ffmpeg — бесплатные компоненты распознавания речи и извлечения звука из видео.
@@ -21,6 +22,8 @@ class WhisperSetupDialog(ctk.CTkToplevel):
 
     def __init__(self, master: ctk.CTk, status: DependencyStatus) -> None:
         super().__init__(master)
+        apply_appearance()
+        self.configure(fg_color=COLOR["bg"])
         self.title("Транскрибация — установка Whisper")
         self.geometry("520x460")
         self.resizable(False, False)
@@ -35,43 +38,65 @@ class WhisperSetupDialog(ctk.CTkToplevel):
             missing.append("ffmpeg")
         missing_line = ", ".join(missing) if missing else "компоненты распознавания"
 
-        pad = {"padx": 24}
+        pad = {"padx": 28}
 
         ctk.CTkLabel(
             self,
-            text="Установка для работы «Транскрибация»",
-            font=ctk.CTkFont(size=18, weight="bold"),
+            text="Установка Whisper",
+            font=F(22, "bold"),
+            text_color=COLOR["ink"],
             anchor="w",
-        ).pack(anchor="w", pady=(22, 8), **pad)
+        ).pack(anchor="w", pady=(26, 6), **pad)
+
+        ctk.CTkFrame(self, height=2, width=40, fg_color=COLOR["accent"], corner_radius=1).pack(
+            anchor="w", padx=28, pady=(0, 12)
+        )
 
         ctk.CTkLabel(
             self,
             text=f"Не найдено: {missing_line}",
-            text_color=("gray30", "gray70"),
+            font=F(12),
+            text_color=COLOR["muted"],
             anchor="w",
         ).pack(anchor="w", pady=(0, 10), **pad)
 
-        body = ctk.CTkTextbox(self, width=470, height=260, wrap="word")
-        body.pack(fill="both", expand=True, padx=24, pady=(0, 12))
+        body = ctk.CTkTextbox(
+            self,
+            width=460,
+            height=250,
+            wrap="word",
+            font=F(13),
+            fg_color=COLOR["surface"],
+            text_color=COLOR["ink"],
+            border_width=1,
+            border_color=COLOR["line"],
+            corner_radius=8,
+        )
+        body.pack(fill="both", expand=True, padx=28, pady=(0, 14))
         body.insert("1.0", WHISPER_CONSENT_TEXT)
         body.configure(state="disabled")
 
         buttons = ctk.CTkFrame(self, fg_color="transparent")
-        buttons.pack(fill="x", padx=24, pady=(0, 20))
+        buttons.pack(fill="x", padx=28, pady=(0, 24))
 
         ctk.CTkButton(
             buttons,
             text="Позже",
             width=120,
-            fg_color=("gray75", "gray35"),
+            height=36,
+            font=F(13),
             command=self._decline,
+            **SECONDARY_BTN,
         ).pack(side="left")
 
         ctk.CTkButton(
             buttons,
             text="Установить бесплатно",
             width=200,
+            height=36,
+            font=F(13, "bold"),
             command=self._accept,
+            **PRIMARY_BTN,
         ).pack(side="right")
 
         self.protocol("WM_DELETE_WINDOW", self._decline)

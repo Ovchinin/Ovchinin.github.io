@@ -25,6 +25,14 @@ from .models_info import (
 )
 from .settings import AppSettings
 from .setup_dialog import ask_whisper_install_consent
+from .theme import (
+    COLOR,
+    GHOST_BTN,
+    PRIMARY_BTN,
+    SECONDARY_BTN,
+    F,
+    apply_appearance,
+)
 
 
 VIDEO_TYPES = [
@@ -35,22 +43,12 @@ VIDEO_TYPES = [
 MODEL_CHOICES = list(MODEL_ORDER)
 MODEL_MENU_VALUES = [model_label_for_ui(name) for name in MODEL_CHOICES]
 
-# Вторичные кнопки: серый фон + читаемый disabled-текст (дефолт CTk сливается с серым)
-_SECONDARY_BTN = {
-    "fg_color": ("gray78", "gray32"),
-    "hover_color": ("gray68", "gray40"),
-    "text_color": ("gray15", "gray92"),
-    "text_color_disabled": ("gray40", "gray70"),
-}
-
 _COPY_BTN_LABEL = "Скопировать результат"
 _COPIED_BTN_LABEL = "Скопировано"
-# Как у текста CTkButton (тема: size 13) — иконка в одну высоту с буквами
 _ICON_PX = 13
 
 
 def _draw_copy_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
-    """Два перекрывающихся листа — классическая иконка копирования."""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     stroke = max(2, round(size / 10))
@@ -84,10 +82,9 @@ def _draw_check_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image
 
 
 def _make_btn_icon(kind: str = "copy") -> ctk.CTkImage:
-    """CTkImage light/dark, размер = кегль текста кнопки."""
     master = _ICON_PX * 4
-    light = (25, 25, 25, 255)
-    dark = (240, 240, 240, 255)
+    light = (20, 20, 20, 255)
+    dark = (242, 242, 242, 255)
     drawer = _draw_copy_glyph if kind == "copy" else _draw_check_glyph
     return ctk.CTkImage(
         light_image=drawer(master, light),
@@ -120,15 +117,20 @@ def _fmt_speed(speed_x: float | None) -> str:
     return f"{speed_x:.2f}×"
 
 
+def _hline(parent: ctk.CTkFrame, row: int, padx: int = 0) -> None:
+    line = ctk.CTkFrame(parent, height=1, fg_color=COLOR["line"], corner_radius=0)
+    line.grid(row=row, column=0, sticky="ew", padx=padx, pady=0)
+
+
 class WhisperApp(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
-        ctk.set_appearance_mode("system")
-        ctk.set_default_color_theme("blue")
+        apply_appearance()
+        self.configure(fg_color=COLOR["bg"])
 
         self.title(f"Транскрибация {__version__}")
-        self.geometry("820x720")
-        self.minsize(720, 640)
+        self.geometry("840x760")
+        self.minsize(740, 680)
 
         self.settings = AppSettings.load()
         self.source_path: Path | None = None
@@ -141,176 +143,302 @@ class WhisperApp(ctk.CTk):
 
     def _build(self) -> None:
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(3, weight=1)
+        self.grid_rowconfigure(2, weight=1)
 
-        header = ctk.CTkLabel(
-            self,
+        # —— Brand / intro (одна композиция сверху) ——
+        hero = ctk.CTkFrame(self, fg_color="transparent")
+        hero.grid(row=0, column=0, sticky="ew", padx=36, pady=(28, 8))
+        hero.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            hero,
             text="Транскрибация",
-            font=ctk.CTkFont(size=22, weight="bold"),
-        )
-        header.grid(row=0, column=0, sticky="w", padx=24, pady=(20, 4))
+            font=F(28, "bold"),
+            text_color=COLOR["ink"],
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w")
 
-        sub = ctk.CTkLabel(
-            self,
-            text=(
-                "Переводит в текст аудио и видео файлы (в т.ч. записи экрана с телефона). "
-                "Пока только на русском языке. Локально, через Whisper."
-            ),
-            text_color=("gray40", "gray65"),
+        ctk.CTkLabel(
+            hero,
+            text="Видео и аудио → читаемый русский текст. Локально, через Whisper.",
+            font=F(13),
+            text_color=COLOR["muted"],
             anchor="w",
             justify="left",
-            wraplength=720,
-        )
-        sub.grid(row=1, column=0, sticky="w", padx=24, pady=(0, 12))
+            wraplength=740,
+        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
 
-        form = ctk.CTkFrame(self)
-        form.grid(row=2, column=0, sticky="ew", padx=24, pady=8)
+        # Тонкая акцентная линия под брендом
+        ctk.CTkFrame(hero, height=2, width=48, fg_color=COLOR["accent"], corner_radius=1).grid(
+            row=2, column=0, sticky="w", pady=(14, 0)
+        )
+
+        # —— Форма без «карточек»: поля на фоне ——
+        form = ctk.CTkFrame(self, fg_color="transparent")
+        form.grid(row=1, column=0, sticky="ew", padx=36, pady=(18, 8))
         form.grid_columnconfigure(1, weight=1)
 
+        def _field_label(row: int, text: str) -> None:
+            ctk.CTkLabel(
+                form,
+                text=text,
+                font=F(12),
+                text_color=COLOR["muted"],
+                anchor="w",
+                width=64,
+            ).grid(row=row, column=0, sticky="w", padx=(0, 12), pady=8)
+
         # Source
-        ctk.CTkLabel(form, text="Файл").grid(row=0, column=0, sticky="w", padx=12, pady=(12, 6))
+        _field_label(0, "Файл")
         self.source_var = tk.StringVar(value="Файл не выбран")
-        ctk.CTkEntry(form, textvariable=self.source_var, state="readonly").grid(
-            row=0, column=1, sticky="ew", padx=8, pady=(12, 6)
-        )
-        ctk.CTkButton(form, text="Выбрать…", width=110, command=self._pick_source).grid(
-            row=0, column=2, padx=12, pady=(12, 6)
-        )
+        ctk.CTkEntry(
+            form,
+            textvariable=self.source_var,
+            state="readonly",
+            font=F(13),
+            fg_color=COLOR["surface"],
+            border_color=COLOR["entry_border"],
+            border_width=1,
+            text_color=COLOR["ink"],
+            corner_radius=6,
+            height=34,
+        ).grid(row=0, column=1, sticky="ew", pady=8)
+        ctk.CTkButton(
+            form,
+            text="Выбрать",
+            width=100,
+            height=34,
+            font=F(13),
+            command=self._pick_source,
+            **SECONDARY_BTN,
+        ).grid(row=0, column=2, padx=(10, 0), pady=8)
 
-        # Output dir
-        ctk.CTkLabel(form, text="Папка").grid(row=1, column=0, sticky="w", padx=12, pady=6)
+        # Output
+        _field_label(1, "Папка")
         self.output_var = tk.StringVar(value=self.settings.output_dir)
-        ctk.CTkEntry(form, textvariable=self.output_var).grid(
-            row=1, column=1, sticky="ew", padx=8, pady=6
-        )
-        ctk.CTkButton(form, text="Куда…", width=110, command=self._pick_output).grid(
-            row=1, column=2, padx=12, pady=6
-        )
+        ctk.CTkEntry(
+            form,
+            textvariable=self.output_var,
+            font=F(13),
+            fg_color=COLOR["surface"],
+            border_color=COLOR["entry_border"],
+            border_width=1,
+            text_color=COLOR["ink"],
+            corner_radius=6,
+            height=34,
+        ).grid(row=1, column=1, sticky="ew", pady=8)
+        ctk.CTkButton(
+            form,
+            text="Куда",
+            width=100,
+            height=34,
+            font=F(13),
+            command=self._pick_output,
+            **SECONDARY_BTN,
+        ).grid(row=1, column=2, padx=(10, 0), pady=8)
 
-        # Model / language
-        ctk.CTkLabel(form, text="Модель").grid(row=2, column=0, sticky="nw", padx=12, pady=6)
+        # Model
+        _field_label(2, "Модель")
         initial_model = self.settings.model_size if self.settings.model_size in MODEL_CHOICES else "small"
         self.model_var = tk.StringVar(value=model_label_for_ui(initial_model))
         ctk.CTkOptionMenu(
             form,
             values=MODEL_MENU_VALUES,
             variable=self.model_var,
-            width=280,
+            width=320,
+            height=34,
+            font=F(13),
+            dropdown_font=F(13),
+            fg_color=COLOR["surface"],
+            button_color=COLOR["muted_surface"],
+            button_hover_color=COLOR["line"],
+            text_color=COLOR["ink"],
+            dropdown_fg_color=COLOR["surface"],
+            dropdown_hover_color=COLOR["muted_surface"],
+            dropdown_text_color=COLOR["ink"],
+            corner_radius=6,
             command=lambda _v: self._refresh_model_hint(),
-        ).grid(row=2, column=1, sticky="w", padx=8, pady=6)
+        ).grid(row=2, column=1, sticky="w", pady=8)
+
         self.model_hint = ctk.CTkLabel(
             form,
             text="",
-            text_color=("gray40", "gray65"),
-            anchor="w",
-            justify="left",
-            wraplength=520,
-        )
-        self.model_hint.grid(row=3, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 2))
-
-        self._models_info_expanded = False
-        self.models_toggle_btn = ctk.CTkButton(
-            form,
-            text="▶ Больше информации о моделях",
-            anchor="w",
-            fg_color="transparent",
-            hover_color=("gray85", "gray25"),
-            text_color=("gray20", "gray90"),
-            height=28,
-            command=self._toggle_models_info,
-        )
-        self.models_toggle_btn.grid(row=4, column=1, columnspan=2, sticky="ew", padx=8, pady=(2, 2))
-
-        self.models_legend = ctk.CTkLabel(
-            form,
-            text=all_models_legend(),
-            text_color=("gray35", "gray70"),
+            font=F(12),
+            text_color=COLOR["faint"],
             anchor="w",
             justify="left",
             wraplength=560,
         )
-        # По умолчанию свёрнуто — не размещаем в grid
+        self.model_hint.grid(row=3, column=1, columnspan=2, sticky="w", pady=(0, 2))
+
+        self._models_info_expanded = False
+        self.models_toggle_btn = ctk.CTkButton(
+            form,
+            text="Больше о моделях",
+            anchor="w",
+            font=F(12),
+            height=26,
+            command=self._toggle_models_info,
+            **GHOST_BTN,
+        )
+        self.models_toggle_btn.grid(row=4, column=1, columnspan=2, sticky="w", pady=(2, 2))
+
+        self.models_legend = ctk.CTkLabel(
+            form,
+            text=all_models_legend(),
+            font=F(12),
+            text_color=COLOR["muted"],
+            anchor="w",
+            justify="left",
+            wraplength=580,
+        )
         self._refresh_model_hint()
 
+        opts = ctk.CTkFrame(form, fg_color="transparent")
+        opts.grid(row=6, column=1, columnspan=2, sticky="w", pady=(10, 4))
+
         self.srt_var = tk.BooleanVar(value=self.settings.write_srt)
-        ctk.CTkCheckBox(form, text="Также сохранить .srt (субтитры)", variable=self.srt_var).grid(
-            row=6, column=1, sticky="w", padx=8, pady=(6, 4)
-        )
+        ctk.CTkCheckBox(
+            opts,
+            text="Сохранить .srt",
+            variable=self.srt_var,
+            font=F(12),
+            text_color=COLOR["ink"],
+            fg_color=COLOR["accent"],
+            hover_color=COLOR["accent_hover"],
+            border_color=COLOR["entry_border"],
+            checkmark_color=("#FFFFFF", "#0E1614"),
+            corner_radius=3,
+        ).pack(side="left", padx=(0, 20))
 
         self.notify_var = tk.BooleanVar(value=self.settings.notify_on_complete)
         ctk.CTkCheckBox(
-            form,
-            text="Получить уведомление об окончании выполнения операции",
+            opts,
+            text="Уведомить об окончании",
             variable=self.notify_var,
             command=self._persist_form_settings,
-        ).grid(row=7, column=1, sticky="w", padx=8, pady=(0, 12))
+            font=F(12),
+            text_color=COLOR["ink"],
+            fg_color=COLOR["accent"],
+            hover_color=COLOR["accent_hover"],
+            border_color=COLOR["entry_border"],
+            checkmark_color=("#FFFFFF", "#0E1614"),
+            corner_radius=3,
+        ).pack(side="left")
 
         # Actions
         actions = ctk.CTkFrame(form, fg_color="transparent")
-        actions.grid(row=8, column=0, columnspan=3, sticky="ew", padx=12, pady=(4, 14))
+        actions.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(16, 4))
         actions.grid_columnconfigure(0, weight=1)
 
-        self.deps_label = ctk.CTkLabel(actions, text="Проверка зависимостей…", anchor="w")
+        self.deps_label = ctk.CTkLabel(
+            actions,
+            text="Проверка зависимостей…",
+            font=F(12),
+            text_color=COLOR["muted"],
+            anchor="w",
+        )
         self.deps_label.grid(row=0, column=0, sticky="w")
 
         self.install_btn = ctk.CTkButton(
             actions,
             text="Установить Whisper",
-            width=160,
+            width=168,
+            height=36,
+            font=F(13),
             command=self._offer_install,
+            **SECONDARY_BTN,
         )
-        self.install_btn.grid(row=0, column=1, padx=6)
+        self.install_btn.grid(row=0, column=1, padx=(8, 8))
         self.install_btn.grid_remove()
-
-        self.start_btn = ctk.CTkButton(
-            actions, text="Транскрибировать", width=160, command=self._start
-        )
-        self.start_btn.grid(row=0, column=2, padx=6)
 
         self.cancel_btn = ctk.CTkButton(
             actions,
             text="Отмена",
-            width=100,
+            width=96,
+            height=36,
+            font=F(13),
             command=self._cancel,
             state="disabled",
-            **_SECONDARY_BTN,
+            **SECONDARY_BTN,
         )
-        self.cancel_btn.grid(row=0, column=3, padx=(6, 0))
+        self.cancel_btn.grid(row=0, column=2, padx=(0, 8))
 
-        # Progress + preview
-        body = ctk.CTkFrame(self)
-        body.grid(row=3, column=0, sticky="nsew", padx=24, pady=(8, 20))
+        self.start_btn = ctk.CTkButton(
+            actions,
+            text="Транскрибировать",
+            width=168,
+            height=36,
+            font=F(13, "bold"),
+            command=self._start,
+            **PRIMARY_BTN,
+        )
+        self.start_btn.grid(row=0, column=3)
+
+        # —— Результат (основная рабочая область) ——
+        body = ctk.CTkFrame(self, fg_color="transparent")
+        body.grid(row=2, column=0, sticky="nsew", padx=36, pady=(12, 28))
         body.grid_columnconfigure(0, weight=1)
         body.grid_rowconfigure(4, weight=1)
 
-        self.stage_label = ctk.CTkLabel(body, text="Ожидание файла", anchor="w")
-        self.stage_label.grid(row=0, column=0, sticky="ew", padx=16, pady=(16, 4))
+        _hline(body, 0)
 
-        self.progress = ctk.CTkProgressBar(body)
-        self.progress.grid(row=1, column=0, sticky="ew", padx=16, pady=4)
+        self.stage_label = ctk.CTkLabel(
+            body,
+            text="Ожидание файла",
+            font=F(12),
+            text_color=COLOR["muted"],
+            anchor="w",
+        )
+        self.stage_label.grid(row=1, column=0, sticky="ew", pady=(14, 6))
+
+        self.progress = ctk.CTkProgressBar(
+            body,
+            height=4,
+            corner_radius=2,
+            progress_color=COLOR["progress"],
+            fg_color=COLOR["progress_track"],
+        )
+        self.progress.grid(row=2, column=0, sticky="ew", pady=(0, 6))
         self.progress.set(0)
 
         stats = ctk.CTkFrame(body, fg_color="transparent")
-        stats.grid(row=2, column=0, sticky="ew", padx=16, pady=4)
+        stats.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         for i in range(3):
             stats.grid_columnconfigure(i, weight=1)
 
-        self.pct_label = ctk.CTkLabel(stats, text="0%")
+        self.pct_label = ctk.CTkLabel(stats, text="0%", font=F(12), text_color=COLOR["faint"])
         self.pct_label.grid(row=0, column=0, sticky="w")
-        self.speed_label = ctk.CTkLabel(stats, text="Скорость: —")
+        self.speed_label = ctk.CTkLabel(
+            stats, text="Скорость: —", font=F(12), text_color=COLOR["faint"]
+        )
         self.speed_label.grid(row=0, column=1)
-        self.eta_label = ctk.CTkLabel(stats, text="Осталось: —")
+        self.eta_label = ctk.CTkLabel(
+            stats, text="Осталось: —", font=F(12), text_color=COLOR["faint"]
+        )
         self.eta_label.grid(row=0, column=2, sticky="e")
 
-        result_header = ctk.CTkFrame(body, fg_color="transparent")
-        result_header.grid(row=3, column=0, sticky="ew", padx=16, pady=(12, 4))
+        result_panel = ctk.CTkFrame(
+            body,
+            fg_color=COLOR["surface"],
+            border_width=1,
+            border_color=COLOR["line"],
+            corner_radius=8,
+        )
+        result_panel.grid(row=4, column=0, sticky="nsew")
+        result_panel.grid_columnconfigure(0, weight=1)
+        result_panel.grid_rowconfigure(1, weight=1)
+
+        result_header = ctk.CTkFrame(result_panel, fg_color="transparent")
+        result_header.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 6))
         result_header.grid_columnconfigure(0, weight=1)
 
         self.result_title = ctk.CTkLabel(
             result_header,
             text="Результат работы",
             anchor="w",
-            font=ctk.CTkFont(size=15, weight="bold"),
+            font=F(14, "bold"),
+            text_color=COLOR["ink"],
         )
         self.result_title.grid(row=0, column=0, sticky="w")
 
@@ -321,16 +449,27 @@ class WhisperApp(ctk.CTk):
             text=_COPY_BTN_LABEL,
             image=self._copy_icon,
             compound="left",
-            width=220,
+            width=210,
             height=30,
+            font=F(12),
             command=self._copy_result,
             state="disabled",
-            **_SECONDARY_BTN,
+            **SECONDARY_BTN,
         )
-        self.copy_btn.grid(row=0, column=1, sticky="e", padx=(8, 0))
+        self.copy_btn.grid(row=0, column=1, sticky="e")
 
-        self.preview = ctk.CTkTextbox(body, wrap="word")
-        self.preview.grid(row=4, column=0, sticky="nsew", padx=16, pady=(4, 16))
+        self.preview = ctk.CTkTextbox(
+            result_panel,
+            wrap="word",
+            font=F(13),
+            fg_color=COLOR["surface"],
+            text_color=COLOR["ink"],
+            border_width=0,
+            corner_radius=0,
+            scrollbar_button_color=COLOR["line"],
+            scrollbar_button_hover_color=COLOR["muted"],
+        )
+        self.preview.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
         self.preview.insert("1.0", "Здесь появится результат транскрибации.\n")
         self.preview.configure(state="disabled")
         self._result_ready = False
@@ -339,12 +478,11 @@ class WhisperApp(ctk.CTk):
         status = check_dependencies()
         self._apply_deps_status(status)
         if not status.ready:
-            # Первый запуск / нет Whisper: объяснить, что это бесплатно, и спросить согласие
             self.after(100, lambda: self._offer_install(status=status, auto_prompt=True))
 
     def _apply_deps_status(self, status: DependencyStatus) -> None:
         if status.ready:
-            self.deps_label.configure(text="Whisper и ffmpeg готовы к работе")
+            self.deps_label.configure(text="Whisper и ffmpeg готовы")
             self.install_btn.grid_remove()
             self.start_btn.configure(state="normal")
         else:
@@ -354,7 +492,7 @@ class WhisperApp(ctk.CTk):
             if not status.ffmpeg_ok:
                 missing.append("ffmpeg")
             self.deps_label.configure(
-                text="Для работы нужно установить: " + ", ".join(missing) + " (бесплатно)"
+                text="Нужно установить: " + ", ".join(missing) + " (бесплатно)"
             )
             self.install_btn.grid()
             self.start_btn.configure(state="disabled")
@@ -364,7 +502,6 @@ class WhisperApp(ctk.CTk):
         status: DependencyStatus | None = None,
         auto_prompt: bool = False,
     ) -> None:
-        """Показать согласие и при «Да» установить Whisper из приложения."""
         if self.worker and self.worker.is_alive():
             return
         status = status or check_dependencies()
@@ -376,9 +513,7 @@ class WhisperApp(ctk.CTk):
 
         consented = ask_whisper_install_consent(self, status)
         if not consented:
-            self.deps_label.configure(
-                text="Установка отложена. Нажмите «Установить Whisper», когда будете готовы."
-            )
+            self.deps_label.configure(text="Установка отложена — нажмите «Установить Whisper»")
             self.install_btn.grid()
             self.start_btn.configure(state="disabled")
             return
@@ -408,23 +543,22 @@ class WhisperApp(ctk.CTk):
         name = self._selected_model()
         info = get_model_info(name)
         cached = is_model_cached(name)
-        status = "уже скачана на диск" if cached else "будет скачана при первом запуске"
+        status = "уже на диске" if cached else "скачается при первом запуске"
         self.model_hint.configure(
             text=(
-                f"Выбрано «{info.name}»: {format_size_gb(info.size_gb)}, "
-                f"среднее скачивание {format_avg_wait(info.avg_download_min)} "
-                f"(обычно {info.eta_range}). {info.quality_ru.capitalize()}. "
-                f"Сейчас: {status}."
+                f"{info.name}: {format_size_gb(info.size_gb)}, "
+                f"скачивание {format_avg_wait(info.avg_download_min)} "
+                f"({info.eta_range}). {info.quality_ru.capitalize()}. {status}."
             )
         )
 
     def _toggle_models_info(self) -> None:
         self._models_info_expanded = not self._models_info_expanded
         if self._models_info_expanded:
-            self.models_toggle_btn.configure(text="▼ Больше информации о моделях")
-            self.models_legend.grid(row=5, column=1, columnspan=2, sticky="w", padx=8, pady=(0, 6))
+            self.models_toggle_btn.configure(text="Скрыть сведения о моделях")
+            self.models_legend.grid(row=5, column=1, columnspan=2, sticky="w", pady=(0, 6))
         else:
-            self.models_toggle_btn.configure(text="▶ Больше информации о моделях")
+            self.models_toggle_btn.configure(text="Больше о моделях")
             self.models_legend.grid_remove()
 
     def _persist_form_settings(self) -> None:
@@ -436,7 +570,6 @@ class WhisperApp(ctk.CTk):
         self.settings.save()
 
     def _notify_completion(self, title: str, body: str) -> None:
-        """Всплывающее сообщение + системное уведомление macOS (если галочка включена)."""
         if not self.settings.notify_on_complete:
             return
         try:
@@ -446,10 +579,9 @@ class WhisperApp(ctk.CTk):
             self.focus_force()
         except Exception:
             pass
-        # Системное уведомление macOS — видно даже если окно не на переднем плане
         try:
-            safe_title = title.replace('\\', '\\\\').replace('"', '\\"')
-            safe_body = body.replace('\\', '\\\\').replace('"', '\\"')
+            safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
+            safe_body = body.replace("\\", "\\\\").replace('"', '\\"')
             subprocess.run(
                 [
                     "osascript",
@@ -520,10 +652,9 @@ class WhisperApp(ctk.CTk):
         self.after(0, apply)
 
     def _install_deps(self) -> None:
-        """Установка Whisper/ffmpeg из приложения после согласия пользователя."""
         self._set_busy(True)
-        self.deps_label.configure(text="Идёт автоматическая установка…")
-        self.stage_label.configure(text="Установка Whisper (бесплатно, из приложения)…")
+        self.deps_label.configure(text="Идёт установка…")
+        self.stage_label.configure(text="Установка Whisper…")
         self.progress.set(0.05)
         self._set_preview(
             "Устанавливаем Whisper и необходимые компоненты.\n"
@@ -544,16 +675,14 @@ class WhisperApp(ctk.CTk):
                         0,
                         lambda: messagebox.showinfo(
                             "Установка завершена",
-                            "Whisper установлен из приложения и готов к работе.\n\n"
-                            "Это бесплатно. При первой транскрибации один раз "
-                            "скачается выбранная модель — размер и среднее время "
-                            "скачивания показаны под списком моделей.",
+                            "Whisper установлен и готов к работе.\n\n"
+                            "При первой транскрибации один раз скачается выбранная модель.",
                         ),
                     )
                     self.after(
                         0,
                         lambda: self._set_preview(
-                            "Whisper установлен. Выберите видео и нажмите «Транскрибировать».\n"
+                            "Whisper установлен. Выберите файл и нажмите «Транскрибировать».\n"
                         ),
                     )
                 else:
@@ -561,7 +690,7 @@ class WhisperApp(ctk.CTk):
                         0,
                         lambda: messagebox.showerror(
                             "Установка не завершена",
-                            "Приложение не смогло установить всё автоматически.\n\n"
+                            "Не удалось установить всё автоматически.\n\n"
                             + "\n".join(status.details),
                         ),
                     )
@@ -570,7 +699,7 @@ class WhisperApp(ctk.CTk):
                 self.after(
                     0,
                     lambda: self.deps_label.configure(
-                        text="Установка не удалась — нажмите «Установить Whisper» ещё раз"
+                        text="Установка не удалась — попробуйте ещё раз"
                     ),
                 )
             finally:
