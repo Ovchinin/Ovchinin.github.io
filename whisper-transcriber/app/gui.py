@@ -291,35 +291,33 @@ class WhisperApp(ctk.CTk):
         self.model_field.grid_columnconfigure(0, weight=1)
         self.model_field.grid_rowconfigure(0, weight=1)
 
-        self.model_btn = ctk.CTkButton(
+        # Текст слева (Label), шеврон справа — клик по всему полю открывает меню
+        self.model_label = ctk.CTkLabel(
             self.model_field,
             textvariable=self.model_var,
             anchor="w",
+            justify="left",
             font=F(13),
-            height=34,
-            fg_color="transparent",
-            hover_color=COLOR["muted_surface"],
             text_color=COLOR["ink"],
-            text_color_disabled=COLOR["faint"],
-            border_width=0,
-            corner_radius=7,
-            command=self._open_model_menu,
+            fg_color="transparent",
         )
-        self.model_btn.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=1)
+        self.model_label.grid(row=0, column=0, sticky="nsew", padx=(12, 4), pady=1)
+        self.model_label.bind("<Button-1>", lambda _e: self._open_model_menu())
 
         self.model_chevron_btn = ctk.CTkButton(
             self.model_field,
             text="",
             image=self._chevron_icon,
-            width=32,
+            width=28,
             height=34,
             fg_color="transparent",
-            hover_color=COLOR["muted_surface"],
+            hover_color="transparent",
             border_width=0,
-            corner_radius=7,
+            corner_radius=0,
             command=self._open_model_menu,
         )
-        self.model_chevron_btn.grid(row=0, column=1, sticky="e", padx=(0, 4), pady=1)
+        self.model_chevron_btn.grid(row=0, column=1, sticky="e", padx=(0, 6), pady=1)
+        self.model_field.bind("<Button-1>", lambda _e: self._open_model_menu())
 
         self.model_hint = ctk.CTkLabel(
             form,
