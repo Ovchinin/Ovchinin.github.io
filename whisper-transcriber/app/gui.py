@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import threading
 import time
 import tkinter as tk
@@ -9,7 +10,7 @@ import tkinter.messagebox as messagebox
 from pathlib import Path
 
 import customtkinter as ctk
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageTk
 
 from . import __version__
 from .engine import ProgressUpdate, TranscriptionCancelled, transcribe_media
@@ -181,6 +182,8 @@ class WhisperApp(ctk.CTk):
         self.title(f"Транскрибация {__version__}")
         self.geometry("860x800")
         self.minsize(760, 700)
+        self._wm_icon_photo = None
+        self._apply_window_icon()
 
         self.settings = AppSettings.load()
         self.source_path: Path | None = None
@@ -192,6 +195,45 @@ class WhisperApp(ctk.CTk):
 
         self._build()
         self.after(200, self._bootstrap_deps)
+
+    def _apply_window_icon(self) -> None:
+        """Иконка окна/диалогов — логотип приложения, не ракета Python."""
+        resources = Path(__file__).resolve().parent.parent / "resources"
+        for name in ("AppIcon-256.png", "AppIcon-128.png", "AppIcon-512.png", "AppIcon-64.png"):
+            path = resources / name
+            if not path.is_file():
+                continue
+            try:
+                img = Image.open(path).convert("RGBA")
+                photo = ImageTk.PhotoImage(img)
+                self.iconphoto(True, photo)
+                self._wm_icon_photo = photo
+            except Exception:
+                continue
+            break
+
+    def _alert_info(self, title: str, body: str) -> None:
+        """Инфо-диалог без иконки Python (на macOS — системный display dialog)."""
+        if sys.platform == "darwin":
+            script = (
+                "on run argv\n"
+                "  set theTitle to item 1 of argv\n"
+                "  set theBody to item 2 of argv\n"
+                '  display dialog theBody with title theTitle buttons {"OK"} '
+                "default button 1\n"
+                "end run\n"
+            )
+            try:
+                subprocess.run(
+                    ["osascript", "-e", script, title, body],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                return
+            except Exception:
+                pass
+        messagebox.showinfo(title, body, parent=self)
 
     def _build(self) -> None:
         self.grid_columnconfigure(0, weight=1)
@@ -768,7 +810,8 @@ class WhisperApp(ctk.CTk):
             pass
         try:
             safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
-            safe_body = body.replace("\\", "\\\\").replace('"', '\\"')
+            # Notification center: одна строка без перевода
+            safe_body = body.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
             subprocess.run(
                 [
                     "osascript",
@@ -781,7 +824,7 @@ class WhisperApp(ctk.CTk):
             )
         except Exception:
             pass
-        messagebox.showinfo(title, body, parent=self)
+        self._alert_info(title, body)
 
     def _set_busy(self, busy: bool) -> None:
         ready = check_dependencies().ready
@@ -871,7 +914,7 @@ class WhisperApp(ctk.CTk):
             messagebox.showerror("Сохранить как", f"Не удалось сохранить файл:\n{exc}", parent=self)
             return
 
-        messagebox.showinfo("Сохранено", f"Файл записан:\n{written}", parent=self)
+        self._alert_info("Сохранено", f"Файл записан:\n{written}")
 
     def _on_progress(self, update: ProgressUpdate) -> None:
         def apply() -> None:
