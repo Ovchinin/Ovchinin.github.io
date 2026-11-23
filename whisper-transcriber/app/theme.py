@@ -1,43 +1,42 @@
-"""Минималистичная палитра и типографика «Транскрибация»."""
+"""Editorial-минимализм: тёплый камень, уголь, гротеск без засечек."""
 
 from __future__ import annotations
 
 import customtkinter as ctk
 
-# Холодная бумага / чернила — без фиолетового и «cream + terracotta»
+# Тёплый камень / уголь — без фиолетового; акцент угольный, не terracotta
 COLOR = {
-    "bg": ("#F3F4F6", "#141414"),
-    "surface": ("#FFFFFF", "#1C1C1C"),
-    "muted_surface": ("#ECEDEF", "#222222"),
-    "ink": ("#141414", "#F2F2F2"),
-    "muted": ("#6B7280", "#9CA3AF"),
-    "faint": ("#9CA3AF", "#6B7280"),
-    "line": ("#E5E7EB", "#2A2A2A"),
-    "accent": ("#1F3A34", "#A7C4BC"),  # приглушённый хвойный, только для CTA
-    "accent_hover": ("#16302B", "#B9D4CC"),
-    "progress": ("#1F3A34", "#A7C4BC"),
-    "progress_track": ("#E5E7EB", "#2A2A2A"),
-    "entry_border": ("#D1D5DB", "#333333"),
+    "bg": ("#E8E6E1", "#161513"),
+    "surface": ("#F7F6F3", "#1E1C1A"),
+    "muted_surface": ("#DDDAD3", "#2A2825"),
+    "ink": ("#1A1917", "#F3F1EC"),
+    "muted": ("#6F6A62", "#A39E94"),
+    "faint": ("#958F85", "#7A756C"),
+    "line": ("#D2CEC5", "#33302C"),
+    "accent": ("#2A2825", "#E8E4DC"),
+    "accent_hover": ("#1A1917", "#F3F1EC"),
+    "progress": ("#2A2825", "#C9C3B8"),
+    "progress_track": ("#D2CEC5", "#33302C"),
+    "entry_border": ("#C8C3B8", "#3A3732"),
 }
 
 PRIMARY_BTN = {
     "fg_color": COLOR["accent"],
     "hover_color": COLOR["accent_hover"],
-    "text_color": ("#F8FAF9", "#0E1614"),
-    "text_color_disabled": ("#A8B5B1", "#5A6B66"),
-    "corner_radius": 6,
+    "text_color": ("#F7F6F3", "#1A1917"),
+    "text_color_disabled": ("#9A958C", "#5C584F"),
+    "corner_radius": 8,
     "border_width": 0,
 }
 
 SECONDARY_BTN = {
-    # Лёгкая заливка + обводка: в disabled текст остаётся читаемым
     "fg_color": COLOR["surface"],
     "hover_color": COLOR["muted_surface"],
     "text_color": COLOR["ink"],
-    "text_color_disabled": ("#4B5563", "#A3A3A3"),
+    "text_color_disabled": ("#6F6A62", "#A39E94"),
     "border_width": 1,
     "border_color": COLOR["line"],
-    "corner_radius": 6,
+    "corner_radius": 8,
 }
 
 GHOST_BTN = {
@@ -46,14 +45,14 @@ GHOST_BTN = {
     "text_color": COLOR["muted"],
     "text_color_disabled": COLOR["faint"],
     "border_width": 0,
-    "corner_radius": 4,
+    "corner_radius": 6,
 }
 
 _FONT_FAMILY: str | None = None
 
 
 def font_family() -> str:
-    """Выразительный гротеск; без Inter/Roboto/Arial/system."""
+    """Гротеск без засечек (не Inter/Roboto/Arial/system)."""
     global _FONT_FAMILY
     if _FONT_FAMILY:
         return _FONT_FAMILY

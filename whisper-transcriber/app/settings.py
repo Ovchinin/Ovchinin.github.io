@@ -32,7 +32,7 @@ class AppSettings:
     output_dir: str = ""
     model_size: str = "small"
     language: str = "ru"
-    write_srt: bool = True
+    write_srt: bool = False  # субтитры .srt больше не сохраняются из GUI
     notify_on_complete: bool = True
     device: str = "auto"  # auto | cpu | cuda
 

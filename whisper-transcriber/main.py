@@ -25,7 +25,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Папка для результата (по умолчанию — из настроек / Рабочий стол)",
     )
     parser.add_argument("--model", default=None, help="Размер модели Whisper")
-    parser.add_argument("--no-srt", action="store_true", help="Не писать .srt")
     parser.add_argument("--check", action="store_true", help="Проверить зависимости и выйти")
     parser.add_argument("--install", action="store_true", help="Установить зависимости и выйти")
     args = parser.parse_args(argv)
@@ -51,8 +50,7 @@ def main(argv: list[str] | None = None) -> int:
             settings.output_dir = args.output_dir
         if args.model:
             settings.model_size = args.model
-        if args.no_srt:
-            settings.write_srt = False
+        settings.write_srt = False
         settings.language = "ru"
         settings.save()
 
@@ -70,8 +68,6 @@ def main(argv: list[str] | None = None) -> int:
             on_progress=on_progress,
         )
         print(f"\nГотово: {result.text_path}")
-        if result.srt_path:
-            print(f"SRT: {result.srt_path}")
         return 0
 
     from app.gui import run
