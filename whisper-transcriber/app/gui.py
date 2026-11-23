@@ -33,6 +33,7 @@ from .theme import (
     SECONDARY_BTN,
     F,
     apply_appearance,
+    font_family,
 )
 
 
@@ -47,16 +48,22 @@ MODEL_MENU_VALUES = [model_label_for_ui(name) for name in MODEL_CHOICES]
 _COPY_BTN_LABEL = "Скопировать результат"
 _COPIED_BTN_LABEL = "Скопировано"
 _SAVE_AS_LABEL = "Сохранить как…"
-# Тонкие иконки в ритм с подписью кнопки (12 pt ≈ 11–12 px)
+# «Предложение» + «тоньше и меньше»: 11 px, ~1 px stroke, серый
 _ICON_PX = 11
+_ICON_LIGHT = (160, 154, 144, 255)  # средний серый на тёплом камне
+_ICON_DARK = (170, 164, 154, 255)
+
+
+def _hairline(size: int) -> int:
+    """~1 px на экране при master 4–5×."""
+    return max(1, round(size / 22))
 
 
 def _draw_copy_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    # Тонкая обводка (~1–1.5 px на экране при master 4×)
-    stroke = max(1, round(size / 18))
-    radius = max(1, round(size / 14))
+    stroke = _hairline(size)
+    radius = max(1, round(size / 16))
     draw.rounded_rectangle(
         (size * 0.30, size * 0.08, size * 0.92, size * 0.70),
         radius=radius,
@@ -75,25 +82,41 @@ def _draw_copy_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
 def _draw_check_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    w = max(1, round(size / 14))
+    w = _hairline(size)
     points = [
-        (size * 0.16, size * 0.52),
-        (size * 0.40, size * 0.76),
-        (size * 0.86, size * 0.24),
+        (size * 0.18, size * 0.52),
+        (size * 0.40, size * 0.74),
+        (size * 0.84, size * 0.26),
+    ]
+    draw.line(points, fill=fill, width=w, joint="curve")
+    return img
+
+
+def _draw_chevron_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
+    """Тонкая стрелка выбора модели («тоньше и меньше»)."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    w = _hairline(size)
+    points = [
+        (size * 0.22, size * 0.36),
+        (size * 0.50, size * 0.64),
+        (size * 0.78, size * 0.36),
     ]
     draw.line(points, fill=fill, width=w, joint="curve")
     return img
 
 
 def _make_btn_icon(kind: str = "copy") -> ctk.CTkImage:
-    master = _ICON_PX * 4
-    # Чуть мягче чистого угля — не перебивают текст
-    light = (95, 90, 82, 255)
-    dark = (200, 195, 186, 255)
-    drawer = _draw_copy_glyph if kind == "copy" else _draw_check_glyph
+    master = _ICON_PX * 5
+    drawers = {
+        "copy": _draw_copy_glyph,
+        "check": _draw_check_glyph,
+        "chevron": _draw_chevron_glyph,
+    }
+    drawer = drawers.get(kind, _draw_copy_glyph)
     return ctk.CTkImage(
-        light_image=drawer(master, light),
-        dark_image=drawer(master, dark),
+        light_image=drawer(master, _ICON_LIGHT),
+        dark_image=drawer(master, _ICON_DARK),
         size=(_ICON_PX, _ICON_PX),
     )
 
@@ -249,24 +272,27 @@ class WhisperApp(ctk.CTk):
         _label(3, "Модель")
         initial_model = self.settings.model_size if self.settings.model_size in MODEL_CHOICES else "small"
         self.model_var = tk.StringVar(value=model_label_for_ui(initial_model))
-        ctk.CTkOptionMenu(
+        self._chevron_icon = _make_btn_icon("chevron")
+        # Кастомный селектор: тонкая иконка вместо жирного треугольника CTkOptionMenu
+        self.model_btn = ctk.CTkButton(
             form,
-            values=MODEL_MENU_VALUES,
-            variable=self.model_var,
+            textvariable=self.model_var,
+            image=self._chevron_icon,
+            compound="right",
+            anchor="w",
             width=340,
             height=36,
             font=F(13),
-            dropdown_font=F(13),
             fg_color=COLOR["surface"],
-            button_color=COLOR["muted_surface"],
-            button_hover_color=COLOR["line"],
+            hover_color=COLOR["muted_surface"],
             text_color=COLOR["ink"],
-            dropdown_fg_color=COLOR["surface"],
-            dropdown_hover_color=COLOR["muted_surface"],
-            dropdown_text_color=COLOR["ink"],
+            text_color_disabled=COLOR["faint"],
+            border_width=1,
+            border_color=COLOR["entry_border"],
             corner_radius=8,
-            command=lambda _v: self._refresh_model_hint(),
-        ).grid(row=3, column=1, sticky="w", pady=6)
+            command=self._open_model_menu,
+        )
+        self.model_btn.grid(row=3, column=1, sticky="w", pady=6)
 
         self.model_hint = ctk.CTkLabel(
             form,
@@ -303,21 +329,22 @@ class WhisperApp(ctk.CTk):
         self._refresh_model_hint()
 
         self.notify_var = tk.BooleanVar(value=self.settings.notify_on_complete)
+        # «Предложение»: светло-серый бокс, тонкая серая галочка, 14 px
         ctk.CTkCheckBox(
             form,
             text="Получить уведомление об окончании выполнения операции",
             variable=self.notify_var,
             command=self._persist_form_settings,
             font=F(12),
-            text_color=COLOR["ink"],
-            fg_color=COLOR["accent"],
-            hover_color=COLOR["accent_hover"],
-            border_color=COLOR["entry_border"],
+            text_color=COLOR["muted"],
+            fg_color=("#D8D4CC", "#3A3732"),
+            hover_color=("#CBC6BC", "#45423C"),
+            border_color=("#B0AAA0", "#5A554E"),
             border_width=1,
-            checkmark_color=COLOR["surface"],
+            checkmark_color=("#7A756C", "#C4BEB4"),
             checkbox_width=14,
             checkbox_height=14,
-            corner_radius=2,
+            corner_radius=3,
             height=22,
         ).grid(row=7, column=1, columnspan=2, sticky="w", pady=(12, 4))
 
@@ -455,7 +482,13 @@ class WhisperApp(ctk.CTk):
             font=F(12),
             command=self._copy_result,
             state="disabled",
-            **SECONDARY_BTN,
+            fg_color=COLOR["surface"],
+            hover_color=COLOR["muted_surface"],
+            text_color=COLOR["muted"],
+            text_color_disabled=COLOR["faint"],
+            border_width=1,
+            border_color=COLOR["line"],
+            corner_radius=8,
         )
         self.copy_btn.grid(row=0, column=0, sticky="w")
 
@@ -525,6 +558,24 @@ class WhisperApp(ctk.CTk):
 
     def _selected_model(self) -> str:
         return _model_name_from_menu(self.model_var.get())
+
+    def _open_model_menu(self) -> None:
+        menu = tk.Menu(self, tearoff=0, font=(font_family(), 12))
+        for label in MODEL_MENU_VALUES:
+            menu.add_command(
+                label=label,
+                command=lambda value=label: self._apply_model_choice(value),
+            )
+        try:
+            x = self.model_btn.winfo_rootx()
+            y = self.model_btn.winfo_rooty() + self.model_btn.winfo_height()
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    def _apply_model_choice(self, label: str) -> None:
+        self.model_var.set(label)
+        self._refresh_model_hint()
 
     def _refresh_model_hint(self) -> None:
         name = self._selected_model()
