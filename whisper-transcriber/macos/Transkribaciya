@@ -112,7 +112,8 @@ source "${VENV}/bin/activate"
 
 # Минимальные пакеты GUI — Whisper поставит само приложение после согласия
 python -m pip install --upgrade pip >/dev/null 2>>"${LOG_DIR}/pip.log" || true
-python -m pip install "customtkinter>=5.2.2" "Pillow>=10.0.0" >>"${LOG_DIR}/pip.log" 2>&1 || true
+# GUI + PDF: fpdf2 нужен для «Сохранить как… → PDF» даже без переустановки Whisper
+python -m pip install "customtkinter>=5.2.2" "Pillow>=10.0.0" "fpdf2>=2.7.0,<3" >>"${LOG_DIR}/pip.log" 2>&1 || true
 
 cd "${APP_SRC}"
 # Не глотать traceback: при падении GUI показать диалог (иначе .app просто исчезает)

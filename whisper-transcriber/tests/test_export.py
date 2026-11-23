@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.export import render_export, write_export
+from app.export import render_export, resolve_export_path, write_export
 
 
 class ExportTests(unittest.TestCase):
@@ -46,6 +46,18 @@ class ExportTests(unittest.TestCase):
             doc = Path(tmp) / "out.doc"
             write_export(doc, "Текст DOC")
             self.assertIn("Текст DOC", doc.read_text(encoding="utf-8"))
+
+    def test_resolve_export_path_honors_pdf_type(self) -> None:
+        # macOS часто оставляет .txt при выборе фильтра PDF
+        path = resolve_export_path(Path("/tmp/Interview.txt"), "PDF")
+        self.assertEqual(path.suffix, ".pdf")
+        self.assertEqual(path.stem, "Interview")
+
+        path2 = resolve_export_path(Path("/tmp/Interview"), "Документ Word")
+        self.assertEqual(path2.suffix, ".doc")
+
+        path3 = resolve_export_path(Path("/tmp/Interview.md"), "Markdown")
+        self.assertEqual(path3.suffix, ".md")
 
 
 if __name__ == "__main__":

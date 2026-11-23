@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -23,6 +25,7 @@ _EXT_BY_TYPE = {
     "HTML": ".html",
 }
 
+KNOWN_EXPORT_EXTS = {".txt", ".md", ".doc", ".pdf", ".rtf", ".html", ".htm"}
 _BINARY_EXTS = {".pdf"}
 
 
@@ -33,6 +36,20 @@ def default_extension_for_dialog(file_type_label: str | None) -> str:
         if key in file_type_label:
             return ext
     return ".txt"
+
+
+def resolve_export_path(path: Path, file_type_label: str | None = None) -> Path:
+    """Подставить расширение из типа диалога (на macOS фильтр PDF часто оставляет .txt)."""
+    path = path.expanduser()
+    preferred = default_extension_for_dialog(file_type_label)
+    suffix = path.suffix.lower()
+    if not suffix:
+        return path.with_suffix(preferred)
+    if suffix in KNOWN_EXPORT_EXTS:
+        if preferred != ".txt" and suffix == ".txt" and file_type_label:
+            return path.with_suffix(preferred)
+        return path
+    return path.with_suffix(preferred)
 
 
 def _fonts_dir() -> Path:
@@ -118,8 +135,32 @@ def _render_doc_word_html(plain: str) -> str:
     )
 
 
+def _load_fpdf_class():
+    """fpdf2 может отсутствовать в старом venv — ставим при первом PDF."""
+    try:
+        from fpdf import FPDF
+
+        return FPDF
+    except ImportError:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "fpdf2>=2.7.0,<3"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        from fpdf import FPDF
+
+        return FPDF
+
+
 def _render_pdf_bytes(plain: str) -> bytes:
-    from fpdf import FPDF
+    try:
+        FPDF = _load_fpdf_class()
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            "Не удалось подготовить модуль PDF (fpdf2). "
+            "Проверьте интернет и повторите «Сохранить как».\n"
+            f"{exc}"
+        ) from exc
 
     font_path = _unicode_font_path()
     pdf = FPDF()
@@ -133,7 +174,9 @@ def _render_pdf_bytes(plain: str) -> bytes:
         if not line.strip():
             pdf.ln(6)
             continue
-        pdf.multi_cell(usable, 7, line)
+        # fpdf2 падает на части управляющих символов — вычищаем
+        safe = "".join(ch if (ch >= " " or ch in "\t") else " " for ch in line)
+        pdf.multi_cell(usable, 7, safe)
     out = pdf.output()
     if isinstance(out, (bytes, bytearray)):
         return bytes(out)

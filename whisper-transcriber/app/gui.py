@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 
 from . import __version__
 from .engine import ProgressUpdate, TranscriptionCancelled, transcribe_media
-from .export import SAVE_AS_FILETYPES, write_export
+from .export import SAVE_AS_FILETYPES, resolve_export_path, write_export
 from .installer import DependencyStatus, check_dependencies, ensure_dependencies
 from .models_info import (
     MODEL_ORDER,
@@ -833,6 +833,15 @@ class WhisperApp(ctk.CTk):
 
         self.after(1800, _restore)
 
+    def _result_basename(self) -> str:
+        """Имя результата по умолчанию = имя исходного медиафайла (без расширения)."""
+        if self.source_path is not None:
+            stem = self.source_path.stem.strip()
+            if stem:
+                return stem
+        stem = (self._last_result_stem or "").strip()
+        return stem or "transcript"
+
     def _save_as(self) -> None:
         if not self._result_ready:
             return
@@ -842,24 +851,23 @@ class WhisperApp(ctk.CTk):
             return
 
         initial_dir = self.output_var.get().strip() or self.settings.output_dir
+        type_var = tk.StringVar(value="Текстовый файл")
         path_str = filedialog.asksaveasfilename(
             title="Сохранить результат как",
             initialdir=initial_dir or None,
-            initialfile=f"{self._last_result_stem}.txt",
+            initialfile=f"{self._result_basename()}.txt",
             defaultextension=".txt",
             filetypes=SAVE_AS_FILETYPES,
+            typevariable=type_var,
         )
         if not path_str:
             return
 
-        path = Path(path_str)
-        if not path.suffix:
-            # macOS иногда не подставляет расширение — берём .txt
-            path = path.with_suffix(".txt")
+        path = resolve_export_path(Path(path_str), type_var.get())
 
         try:
             written = write_export(path, text)
-        except OSError as exc:
+        except Exception as exc:  # noqa: BLE001 — показать любую причину сбоя PDF/записи
             messagebox.showerror("Сохранить как", f"Не удалось сохранить файл:\n{exc}", parent=self)
             return
 
@@ -985,7 +993,8 @@ class WhisperApp(ctk.CTk):
                 )
 
                 def done() -> None:
-                    self._last_result_stem = result.text_path.stem
+                    # Всегда от исходного файла, а не от случайного/нумерованного имени
+                    self._last_result_stem = source.stem if source is not None else result.text_path.stem
                     self._set_preview(result.text, result_ready=True)
                     self.stage_label.configure(
                         text=f"Готово → {result.text_path.name} "
