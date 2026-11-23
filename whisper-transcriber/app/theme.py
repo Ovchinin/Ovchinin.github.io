@@ -52,16 +52,16 @@ _FONT_FAMILY: str | None = None
 
 
 def font_family() -> str:
-    """Гротеск без засечек (не Inter/Roboto/Arial/system)."""
+    """Гротеск без засечек: Gill Sans (стандарт macOS), затем запасные."""
     global _FONT_FAMILY
     if _FONT_FAMILY:
         return _FONT_FAMILY
 
     preferred = (
-        "Avenir Next",
-        "Avenir",
-        "Futura",
         "Gill Sans",
+        "Gill Sans MT",
+        "GillSans",
+        "Futura",
         "Helvetica Neue",
         "DejaVu Sans",
     )

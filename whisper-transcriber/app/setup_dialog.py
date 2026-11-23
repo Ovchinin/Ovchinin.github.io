@@ -43,7 +43,7 @@ class WhisperSetupDialog(ctk.CTkToplevel):
         ctk.CTkLabel(
             self,
             text="Установка Whisper",
-            font=F(22, "bold"),
+            font=F(22),
             text_color=COLOR["ink"],
             anchor="w",
         ).pack(anchor="w", pady=(26, 6), **pad)

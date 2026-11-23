@@ -181,7 +181,7 @@ class WhisperApp(ctk.CTk):
         ctk.CTkLabel(
             hero,
             text="Транскрибация",
-            font=F(30, "bold"),
+            font=F(30),  # Regular — Gill Sans не «слипается» как Bold
             text_color=COLOR["ink"],
             anchor="w",
         ).grid(row=0, column=0, sticky="w")
@@ -471,7 +471,7 @@ class WhisperApp(ctk.CTk):
             result_panel,
             text="Результат работы",
             anchor="w",
-            font=F(14, "bold"),
+            font=F(14),
             text_color=COLOR["ink"],
         )
         self.result_title.grid(row=0, column=0, sticky="w", padx=18, pady=(16, 6))
