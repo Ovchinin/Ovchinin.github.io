@@ -3,9 +3,7 @@ from __future__ import annotations
 import customtkinter as ctk
 
 from .installer import DependencyStatus
-from .theme import COLOR, PRIMARY_BTN, SECONDARY_BTN, F, apply_appearance, letter_spaced
-
-T = letter_spaced
+from .theme import COLOR, PRIMARY_BTN, SECONDARY_BTN, F, apply_appearance
 
 
 WHISPER_CONSENT_TEXT = """Для работы «Транскрибация» нужно установить Whisper и ffmpeg — бесплатные компоненты распознавания речи и извлечения звука из видео.
@@ -44,7 +42,7 @@ class WhisperSetupDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             self,
-            text=T("Установка Whisper"),
+            text="Установка Whisper",
             font=F(22),
             text_color=COLOR["ink"],
             anchor="w",
@@ -56,7 +54,7 @@ class WhisperSetupDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             self,
-            text=T(f"Не найдено: {missing_line}"),
+            text=f"Не найдено: {missing_line}",
             font=F(12),
             text_color=COLOR["muted"],
             anchor="w",
@@ -75,7 +73,7 @@ class WhisperSetupDialog(ctk.CTkToplevel):
             corner_radius=8,
         )
         body.pack(fill="both", expand=True, padx=28, pady=(0, 14))
-        body.insert("1.0", T(WHISPER_CONSENT_TEXT))
+        body.insert("1.0", WHISPER_CONSENT_TEXT)
         body.configure(state="disabled")
 
         buttons = ctk.CTkFrame(self, fg_color="transparent")
@@ -83,7 +81,7 @@ class WhisperSetupDialog(ctk.CTkToplevel):
 
         ctk.CTkButton(
             buttons,
-            text=T("Позже"),
+            text="Позже",
             width=120,
             height=36,
             font=F(13),
@@ -93,8 +91,8 @@ class WhisperSetupDialog(ctk.CTkToplevel):
 
         ctk.CTkButton(
             buttons,
-            text=T("Установить бесплатно"),
-            width=220,
+            text="Установить бесплатно",
+            width=200,
             height=36,
             font=F(13, "bold"),
             command=self._accept,
