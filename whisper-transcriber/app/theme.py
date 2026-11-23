@@ -30,11 +30,11 @@ PRIMARY_BTN = {
 }
 
 SECONDARY_BTN = {
-    "fg_color": "transparent",
+    # Лёгкая заливка + обводка: в disabled текст остаётся читаемым
+    "fg_color": COLOR["surface"],
     "hover_color": COLOR["muted_surface"],
     "text_color": COLOR["ink"],
-    # Disabled: приглушённо, но читаемо (не сливается с фоном)
-    "text_color_disabled": ("#6B7280", "#9CA3AF"),
+    "text_color_disabled": ("#4B5563", "#A3A3A3"),
     "border_width": 1,
     "border_color": COLOR["line"],
     "corner_radius": 6,
