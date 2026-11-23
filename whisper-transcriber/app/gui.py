@@ -315,17 +315,7 @@ class WhisperApp(ctk.CTk):
         ).grid(row=7, column=1, columnspan=2, sticky="w", pady=(12, 4))
 
         actions = ctk.CTkFrame(form, fg_color="transparent")
-        actions.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(16, 4))
-        actions.grid_columnconfigure(0, weight=1)
-
-        self.deps_label = ctk.CTkLabel(
-            actions,
-            text="Проверка зависимостей…",
-            font=F(12),
-            text_color=COLOR["muted"],
-            anchor="w",
-        )
-        self.deps_label.grid(row=0, column=0, sticky="w")
+        actions.grid(row=8, column=0, columnspan=3, sticky="e", pady=(16, 4))
 
         self.install_btn = ctk.CTkButton(
             actions,
@@ -336,7 +326,7 @@ class WhisperApp(ctk.CTk):
             command=self._offer_install,
             **SECONDARY_BTN,
         )
-        self.install_btn.grid(row=0, column=1, padx=(8, 8))
+        self.install_btn.grid(row=0, column=0, padx=(0, 8))
         self.install_btn.grid_remove()
 
         self.cancel_btn = ctk.CTkButton(
@@ -349,7 +339,7 @@ class WhisperApp(ctk.CTk):
             state="disabled",
             **SECONDARY_BTN,
         )
-        self.cancel_btn.grid(row=0, column=2, padx=(0, 8))
+        self.cancel_btn.grid(row=0, column=1, padx=(0, 8))
 
         self.start_btn = ctk.CTkButton(
             actions,
@@ -360,7 +350,7 @@ class WhisperApp(ctk.CTk):
             command=self._start,
             **PRIMARY_BTN,
         )
-        self.start_btn.grid(row=0, column=3)
+        self.start_btn.grid(row=0, column=2)
 
         # —— Result ——
         body = ctk.CTkFrame(self, fg_color="transparent")
@@ -482,18 +472,9 @@ class WhisperApp(ctk.CTk):
 
     def _apply_deps_status(self, status: DependencyStatus) -> None:
         if status.ready:
-            self.deps_label.configure(text="Whisper и ffmpeg готовы")
             self.install_btn.grid_remove()
             self.start_btn.configure(state="normal")
         else:
-            missing = []
-            if not status.whisper_ok:
-                missing.append("Whisper")
-            if not status.ffmpeg_ok:
-                missing.append("ffmpeg")
-            self.deps_label.configure(
-                text="Нужно установить: " + ", ".join(missing) + " (бесплатно)"
-            )
             self.install_btn.grid()
             self.start_btn.configure(state="disabled")
 
@@ -513,7 +494,6 @@ class WhisperApp(ctk.CTk):
 
         consented = ask_whisper_install_consent(self, status)
         if not consented:
-            self.deps_label.configure(text="Установка отложена — нажмите «Установить Whisper»")
             self.install_btn.grid()
             self.start_btn.configure(state="disabled")
             return
@@ -690,7 +670,6 @@ class WhisperApp(ctk.CTk):
 
     def _install_deps(self) -> None:
         self._set_busy(True)
-        self.deps_label.configure(text="Идёт установка…")
         self.stage_label.configure(text="Установка Whisper…")
         self.progress.set(0.05)
         self._set_preview(
@@ -733,12 +712,7 @@ class WhisperApp(ctk.CTk):
                     )
             except Exception as exc:
                 self.after(0, lambda: messagebox.showerror("Установка", str(exc)))
-                self.after(
-                    0,
-                    lambda: self.deps_label.configure(
-                        text="Установка не удалась — попробуйте ещё раз"
-                    ),
-                )
+                self.after(0, lambda: self.stage_label.configure(text="Установка не удалась"))
             finally:
                 self.after(0, lambda: self._set_busy(False))
 
