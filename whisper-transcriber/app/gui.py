@@ -33,7 +33,6 @@ from .theme import (
     SECONDARY_BTN,
     F,
     apply_appearance,
-    font_family,
 )
 
 
@@ -95,25 +94,49 @@ def _draw_check_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image
     return img
 
 
-def _draw_chevron_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
-    """Стрелка выбора модели — тонкая, но читаемая."""
+def _draw_chevron_glyph(
+    size: int,
+    fill: tuple[int, int, int, int],
+    *,
+    up: bool = False,
+) -> Image.Image:
+    """Стрелка выбора модели — чуть жирнее, вниз/вверх."""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    w = max(2, round(size / 16))
-    points = [
-        (size * 0.20, size * 0.34),
-        (size * 0.50, size * 0.66),
-        (size * 0.80, size * 0.34),
-    ]
+    w = max(3, round(size / 11))
+    if up:
+        points = [
+            (size * 0.18, size * 0.64),
+            (size * 0.50, size * 0.32),
+            (size * 0.82, size * 0.64),
+        ]
+    else:
+        points = [
+            (size * 0.18, size * 0.36),
+            (size * 0.50, size * 0.68),
+            (size * 0.82, size * 0.36),
+        ]
     draw.line(points, fill=fill, width=w, joint="curve")
     return img
 
 
 def _make_btn_icon(kind: str = "copy") -> ctk.CTkImage:
+    if kind == "chevron_up":
+        master = _CHEVRON_PX * 5
+        return ctk.CTkImage(
+            light_image=_draw_chevron_glyph(master, _CHEVRON_LIGHT, up=True),
+            dark_image=_draw_chevron_glyph(master, _CHEVRON_DARK, up=True),
+            size=(_CHEVRON_PX, _CHEVRON_PX),
+        )
     drawers = {
         "copy": (_draw_copy_glyph, _ICON_PX, _ICON_LIGHT, _ICON_DARK),
         "check": (_draw_check_glyph, _ICON_PX, _ICON_LIGHT, _ICON_DARK),
-        "chevron": (_draw_chevron_glyph, _CHEVRON_PX, _CHEVRON_LIGHT, _CHEVRON_DARK),
+        "chevron": (
+            lambda s, f: _draw_chevron_glyph(s, f, up=False),
+            _CHEVRON_PX,
+            _CHEVRON_LIGHT,
+            _CHEVRON_DARK,
+        ),
     }
     drawer, px, light, dark = drawers.get(kind, drawers["copy"])
     master = px * 5
@@ -275,11 +298,15 @@ class WhisperApp(ctk.CTk):
         _label(3, "Модель")
         initial_model = self.settings.model_size if self.settings.model_size in MODEL_CHOICES else "small"
         self.model_var = tk.StringVar(value=model_label_for_ui(initial_model))
-        self._chevron_icon = _make_btn_icon("chevron")
-        # Одно поле: текст слева, шеврон прижат к правому краю (без отдельной зоны)
+        self._chevron_down = _make_btn_icon("chevron")
+        self._chevron_up = _make_btn_icon("chevron_up")
+        self._model_menu_open = False
+        self._model_dropdown: ctk.CTkToplevel | None = None
+        self._model_field_width = 340
+        # Одно поле: текст слева, шеврон у правого края без отдельной заливки
         self.model_field = ctk.CTkFrame(
             form,
-            width=340,
+            width=self._model_field_width,
             height=36,
             fg_color=COLOR["surface"],
             border_width=1,
@@ -291,7 +318,6 @@ class WhisperApp(ctk.CTk):
         self.model_field.grid_columnconfigure(0, weight=1)
         self.model_field.grid_rowconfigure(0, weight=1)
 
-        # Текст слева (Label), шеврон справа — клик по всему полю открывает меню
         self.model_label = ctk.CTkLabel(
             self.model_field,
             textvariable=self.model_var,
@@ -302,23 +328,22 @@ class WhisperApp(ctk.CTk):
             fg_color="transparent",
         )
         self.model_label.grid(row=0, column=0, sticky="nsew", padx=(12, 4), pady=1)
-        self.model_label.bind("<Button-1>", lambda _e: self._open_model_menu())
+        self.model_label.bind("<Button-1>", lambda _e: self._toggle_model_menu())
 
         self.model_chevron_btn = ctk.CTkButton(
             self.model_field,
             text="",
-            image=self._chevron_icon,
+            image=self._chevron_down,
             width=28,
             height=34,
-            # CTk запрещает hover_color="transparent" — совпадает с фоном поля
             fg_color=COLOR["surface"],
-            hover_color=COLOR["muted_surface"],
+            hover_color=COLOR["surface"],
             border_width=0,
-            corner_radius=6,
-            command=self._open_model_menu,
+            corner_radius=0,
+            command=self._toggle_model_menu,
         )
         self.model_chevron_btn.grid(row=0, column=1, sticky="e", padx=(0, 6), pady=1)
-        self.model_field.bind("<Button-1>", lambda _e: self._open_model_menu())
+        self.model_field.bind("<Button-1>", lambda _e: self._toggle_model_menu())
 
         self.model_hint = ctk.CTkLabel(
             form,
@@ -585,23 +610,120 @@ class WhisperApp(ctk.CTk):
     def _selected_model(self) -> str:
         return _model_name_from_menu(self.model_var.get())
 
+    def _toggle_model_menu(self) -> None:
+        if self._model_menu_open:
+            self._close_model_menu()
+        else:
+            self._open_model_menu()
+
+    def _set_chevron_open(self, open_: bool) -> None:
+        self.model_chevron_btn.configure(image=self._chevron_up if open_ else self._chevron_down)
+
     def _open_model_menu(self) -> None:
-        menu = tk.Menu(self, tearoff=0, font=(font_family(), 12))
+        if self._model_dropdown is not None:
+            return
+        self.update_idletasks()
+        width = max(self.model_field.winfo_width(), self._model_field_width)
+        x = self.model_field.winfo_rootx()
+        y = self.model_field.winfo_rooty() + self.model_field.winfo_height() - 1
+
+        pop = ctk.CTkToplevel(self)
+        pop.withdraw()
+        pop.overrideredirect(True)
+        pop.configure(fg_color=COLOR["surface"])
+        pop.attributes("-topmost", True)
+
+        frame = ctk.CTkFrame(
+            pop,
+            fg_color=COLOR["surface"],
+            border_width=1,
+            border_color=COLOR["entry_border"],
+            corner_radius=8,
+            width=width,
+        )
+        frame.pack(fill="both", expand=True)
+        frame.pack_propagate(True)
+
+        current = self.model_var.get()
+        row_h = 32
         for label in MODEL_MENU_VALUES:
-            menu.add_command(
-                label=label,
+            selected = label == current
+            btn = ctk.CTkButton(
+                frame,
+                text=label,
+                anchor="w",
+                height=row_h,
+                font=F(13),
+                fg_color=COLOR["muted_surface"] if selected else COLOR["surface"],
+                hover_color=COLOR["muted_surface"],
+                text_color=COLOR["ink"],
+                border_width=0,
+                corner_radius=6,
                 command=lambda value=label: self._apply_model_choice(value),
             )
+            btn.pack(fill="x", padx=4, pady=2)
+
+        # Высота: строки + отступы; ширина строго как у поля
+        height = len(MODEL_MENU_VALUES) * (row_h + 4) + 8
+        pop.geometry(f"{width}x{height}+{x}+{y}")
+        pop.deiconify()
+        pop.lift()
+        pop.focus_force()
+
+        self._model_dropdown = pop
+        self._model_menu_open = True
+        self._set_chevron_open(True)
+
+        pop.bind("<FocusOut>", lambda _e: self.after(120, self._close_model_menu_if_unfocused))
+        self.bind("<Button-1>", self._on_root_click_close_model, add="+")
+
+    def _close_model_menu_if_unfocused(self) -> None:
+        if not self._model_menu_open or self._model_dropdown is None:
+            return
         try:
-            x = self.model_field.winfo_rootx()
-            y = self.model_field.winfo_rooty() + self.model_field.winfo_height()
-            menu.tk_popup(x, y)
-        finally:
-            menu.grab_release()
+            focused = self.focus_get()
+        except Exception:
+            focused = None
+        if focused is None:
+            self._close_model_menu()
+            return
+        # Фокус ушёл с выпадающего окна
+        try:
+            if str(focused).startswith(str(self._model_dropdown)):
+                return
+        except Exception:
+            pass
+        self._close_model_menu()
+
+    def _on_root_click_close_model(self, event: tk.Event) -> None:
+        if not self._model_menu_open or self._model_dropdown is None:
+            return
+        widget = event.widget
+        # Клик по полю модели — переключает сам toggle; не закрываем здесь
+        try:
+            if widget == self.model_field or str(widget).startswith(str(self.model_field)):
+                return
+            if str(widget).startswith(str(self._model_dropdown)):
+                return
+        except Exception:
+            pass
+        self._close_model_menu()
+
+    def _close_model_menu(self) -> None:
+        if self._model_dropdown is not None:
+            try:
+                self._model_dropdown.destroy()
+            except Exception:
+                pass
+            self._model_dropdown = None
+        self._model_menu_open = False
+        if hasattr(self, "model_chevron_btn"):
+            self._set_chevron_open(False)
 
     def _apply_model_choice(self, label: str) -> None:
         self.model_var.set(label)
         self._refresh_model_hint()
+        self._close_model_menu()
 
     def _refresh_model_hint(self) -> None:
         name = self._selected_model()
