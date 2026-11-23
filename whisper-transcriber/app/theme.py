@@ -95,11 +95,33 @@ def F(size: int = 14, weight: str = "normal") -> ctk.CTkFont:
     return ctk.CTkFont(family=font_family(), size=size, weight=weight)
 
 
-def letter_spaced(text: str, gap: str = "\u200a") -> str:
-    """Лёгкая разрядка для крупных подписей (tkinter не умеет tracking)."""
+# Thin space — заметная разрядка; hair space слишком слабый на кнопках
+_LETTER_GAP = "\u2009"
+
+
+def letter_spaced(text: str, gap: str = _LETTER_GAP) -> str:
+    """Разрядка букв (tkinter не умеет tracking). Пробелы и переносы сохраняются."""
     if not text:
         return text
-    return gap.join(text)
+    out: list[str] = []
+    prev_was_glyph = False
+    for ch in text:
+        if ch.isspace():
+            out.append(ch)
+            prev_was_glyph = False
+            continue
+        if prev_was_glyph:
+            out.append(gap)
+        out.append(ch)
+        prev_was_glyph = True
+    return "".join(out)
+
+
+def unletter_spaced(text: str) -> str:
+    """Убрать разрядку перед разбором подписей (модели и т.п.)."""
+    if not text:
+        return text
+    return text.replace("\u2009", "").replace("\u200a", "")
 
 
 def apply_appearance() -> None:
