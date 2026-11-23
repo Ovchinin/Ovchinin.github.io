@@ -50,13 +50,16 @@ _COPIED_BTN_LABEL = "Скопировано"
 _SAVE_AS_LABEL = "Сохранить как…"
 # «Предложение» + «тоньше и меньше»: 11 px, ~1 px stroke, серый
 _ICON_PX = 11
+_CHEVRON_PX = 16  # крупнее и у правого края поля модели
 _ICON_LIGHT = (160, 154, 144, 255)  # средний серый на тёплом камне
 _ICON_DARK = (170, 164, 154, 255)
+_CHEVRON_LIGHT = (111, 106, 98, 255)  # чуть контрастнее, чтобы был виден
+_CHEVRON_DARK = (196, 190, 180, 255)
 
 
 def _hairline(size: int) -> int:
-    """~1 px на экране при master 4–5×."""
-    return max(1, round(size / 22))
+    """~1–1.5 px на экране при master 5×."""
+    return max(1, round(size / 20))
 
 
 def _draw_copy_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
@@ -93,31 +96,31 @@ def _draw_check_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image
 
 
 def _draw_chevron_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
-    """Тонкая стрелка выбора модели («тоньше и меньше»)."""
+    """Стрелка выбора модели — тонкая, но читаемая."""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    w = _hairline(size)
+    w = max(2, round(size / 16))
     points = [
-        (size * 0.22, size * 0.36),
-        (size * 0.50, size * 0.64),
-        (size * 0.78, size * 0.36),
+        (size * 0.20, size * 0.34),
+        (size * 0.50, size * 0.66),
+        (size * 0.80, size * 0.34),
     ]
     draw.line(points, fill=fill, width=w, joint="curve")
     return img
 
 
 def _make_btn_icon(kind: str = "copy") -> ctk.CTkImage:
-    master = _ICON_PX * 5
     drawers = {
-        "copy": _draw_copy_glyph,
-        "check": _draw_check_glyph,
-        "chevron": _draw_chevron_glyph,
+        "copy": (_draw_copy_glyph, _ICON_PX, _ICON_LIGHT, _ICON_DARK),
+        "check": (_draw_check_glyph, _ICON_PX, _ICON_LIGHT, _ICON_DARK),
+        "chevron": (_draw_chevron_glyph, _CHEVRON_PX, _CHEVRON_LIGHT, _CHEVRON_DARK),
     }
-    drawer = drawers.get(kind, _draw_copy_glyph)
+    drawer, px, light, dark = drawers.get(kind, drawers["copy"])
+    master = px * 5
     return ctk.CTkImage(
-        light_image=drawer(master, _ICON_LIGHT),
-        dark_image=drawer(master, _ICON_DARK),
-        size=(_ICON_PX, _ICON_PX),
+        light_image=drawer(master, light),
+        dark_image=drawer(master, dark),
+        size=(px, px),
     )
 
 
@@ -273,26 +276,50 @@ class WhisperApp(ctk.CTk):
         initial_model = self.settings.model_size if self.settings.model_size in MODEL_CHOICES else "small"
         self.model_var = tk.StringVar(value=model_label_for_ui(initial_model))
         self._chevron_icon = _make_btn_icon("chevron")
-        # Кастомный селектор: тонкая иконка вместо жирного треугольника CTkOptionMenu
-        self.model_btn = ctk.CTkButton(
+        # Одно поле: текст слева, шеврон прижат к правому краю (без отдельной зоны)
+        self.model_field = ctk.CTkFrame(
             form,
-            textvariable=self.model_var,
-            image=self._chevron_icon,
-            compound="right",
-            anchor="w",
             width=340,
             height=36,
-            font=F(13),
             fg_color=COLOR["surface"],
-            hover_color=COLOR["muted_surface"],
-            text_color=COLOR["ink"],
-            text_color_disabled=COLOR["faint"],
             border_width=1,
             border_color=COLOR["entry_border"],
             corner_radius=8,
+        )
+        self.model_field.grid(row=3, column=1, sticky="w", pady=6)
+        self.model_field.grid_propagate(False)
+        self.model_field.grid_columnconfigure(0, weight=1)
+        self.model_field.grid_rowconfigure(0, weight=1)
+
+        self.model_btn = ctk.CTkButton(
+            self.model_field,
+            textvariable=self.model_var,
+            anchor="w",
+            font=F(13),
+            height=34,
+            fg_color="transparent",
+            hover_color=COLOR["muted_surface"],
+            text_color=COLOR["ink"],
+            text_color_disabled=COLOR["faint"],
+            border_width=0,
+            corner_radius=7,
             command=self._open_model_menu,
         )
-        self.model_btn.grid(row=3, column=1, sticky="w", pady=6)
+        self.model_btn.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=1)
+
+        self.model_chevron_btn = ctk.CTkButton(
+            self.model_field,
+            text="",
+            image=self._chevron_icon,
+            width=32,
+            height=34,
+            fg_color="transparent",
+            hover_color=COLOR["muted_surface"],
+            border_width=0,
+            corner_radius=7,
+            command=self._open_model_menu,
+        )
+        self.model_chevron_btn.grid(row=0, column=1, sticky="e", padx=(0, 4), pady=1)
 
         self.model_hint = ctk.CTkLabel(
             form,
@@ -567,8 +594,8 @@ class WhisperApp(ctk.CTk):
                 command=lambda value=label: self._apply_model_choice(value),
             )
         try:
-            x = self.model_btn.winfo_rootx()
-            y = self.model_btn.winfo_rooty() + self.model_btn.winfo_height()
+            x = self.model_field.winfo_rootx()
+            y = self.model_field.winfo_rooty() + self.model_field.winfo_height()
             menu.tk_popup(x, y)
         finally:
             menu.grab_release()
