@@ -29,6 +29,7 @@ rsync -a --delete \
   --exclude '__pycache__' \
   --exclude 'dist' \
   --exclude '.git' \
+  --exclude 'testdata' \
   --exclude 'resources/AppIcon-ai-ref.png' \
   "${ROOT}/" "${APP_DIR}/Contents/Resources/app_src/"
 
