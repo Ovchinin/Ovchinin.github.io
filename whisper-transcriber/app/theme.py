@@ -52,17 +52,19 @@ _FONT_FAMILY: str | None = None
 
 
 def font_family() -> str:
-    """Гротеск без засечек: Gill Sans (стандарт macOS), затем запасные."""
+    """Гротеск без засечек с открытыми метриками (Avenir Next), не тесный Gill Sans."""
     global _FONT_FAMILY
     if _FONT_FAMILY:
         return _FONT_FAMILY
 
+    # Avenir Next / Avenir — шире межбуквенное; Gill Sans оставляем только запасным
     preferred = (
-        "Gill Sans",
-        "Gill Sans MT",
-        "GillSans",
-        "Futura",
+        "Avenir Next",
+        "Avenir",
         "Helvetica Neue",
+        ".AppleSystemUIFont",
+        "Lucida Grande",
+        "Gill Sans",
         "DejaVu Sans",
     )
     try:
@@ -88,8 +90,16 @@ def font_family() -> str:
     return _FONT_FAMILY
 
 
-def F(size: int = 13, weight: str = "normal") -> ctk.CTkFont:
+def F(size: int = 14, weight: str = "normal") -> ctk.CTkFont:
+    """Чуть крупнее база — текст читается свободнее на тёплом камне."""
     return ctk.CTkFont(family=font_family(), size=size, weight=weight)
+
+
+def letter_spaced(text: str, gap: str = "\u200a") -> str:
+    """Лёгкая разрядка для крупных подписей (tkinter не умеет tracking)."""
+    if not text:
+        return text
+    return gap.join(text)
 
 
 def apply_appearance() -> None:

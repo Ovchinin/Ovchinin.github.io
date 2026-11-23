@@ -33,6 +33,7 @@ from .theme import (
     SECONDARY_BTN,
     F,
     apply_appearance,
+    letter_spaced,
 )
 
 
@@ -203,8 +204,8 @@ class WhisperApp(ctk.CTk):
 
         ctk.CTkLabel(
             hero,
-            text="Транскрибация",
-            font=F(30),  # Regular — Gill Sans не «слипается» как Bold
+            text=letter_spaced("Транскрибация"),
+            font=F(28),  # Avenir Next + разрядка — буквы не слипаются
             text_color=COLOR["ink"],
             anchor="w",
         ).grid(row=0, column=0, sticky="w")
