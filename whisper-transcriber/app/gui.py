@@ -310,10 +310,11 @@ class WhisperApp(ctk.CTk):
             image=self._chevron_icon,
             width=28,
             height=34,
-            fg_color="transparent",
-            hover_color="transparent",
+            # CTk запрещает hover_color="transparent" — совпадает с фоном поля
+            fg_color=COLOR["surface"],
+            hover_color=COLOR["muted_surface"],
             border_width=0,
-            corner_radius=0,
+            corner_radius=6,
             command=self._open_model_menu,
         )
         self.model_chevron_btn.grid(row=0, column=1, sticky="e", padx=(0, 6), pady=1)

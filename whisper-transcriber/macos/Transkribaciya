@@ -115,4 +115,21 @@ python -m pip install --upgrade pip >/dev/null 2>>"${LOG_DIR}/pip.log" || true
 python -m pip install "customtkinter>=5.2.2" "Pillow>=10.0.0" >>"${LOG_DIR}/pip.log" 2>&1 || true
 
 cd "${APP_SRC}"
-exec python main.py "$@"
+# Не глотать traceback: при падении GUI показать диалог (иначе .app просто исчезает)
+set +e
+python main.py "$@" >>"${LOG_DIR}/app.log" 2>&1
+STATUS=$?
+set -e
+if [[ "${STATUS}" -ne 0 ]]; then
+  TAIL="$(tail -n 25 "${LOG_DIR}/app.log" 2>/dev/null | sed 's/"/\\"/g' || true)"
+  osascript <<EOF || true
+display dialog "«Транскрибация» не смогла запуститься.
+
+Подробности в логе:
+${LOG_DIR}/app.log
+
+${TAIL}" buttons {"OK"} default button 1 with title "Транскрибация"
+EOF
+  exit "${STATUS}"
+fi
+exit 0
