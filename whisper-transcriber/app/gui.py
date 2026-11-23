@@ -47,22 +47,24 @@ MODEL_MENU_VALUES = [model_label_for_ui(name) for name in MODEL_CHOICES]
 _COPY_BTN_LABEL = "Скопировать результат"
 _COPIED_BTN_LABEL = "Скопировано"
 _SAVE_AS_LABEL = "Сохранить как…"
-_ICON_PX = 13
+# Тонкие иконки в ритм с подписью кнопки (12 pt ≈ 11–12 px)
+_ICON_PX = 11
 
 
 def _draw_copy_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    stroke = max(2, round(size / 10))
-    radius = max(2, round(size / 10))
+    # Тонкая обводка (~1–1.5 px на экране при master 4×)
+    stroke = max(1, round(size / 18))
+    radius = max(1, round(size / 14))
     draw.rounded_rectangle(
-        (size * 0.28, size * 0.06, size * 0.94, size * 0.72),
+        (size * 0.30, size * 0.08, size * 0.92, size * 0.70),
         radius=radius,
         outline=fill,
         width=stroke,
     )
     draw.rounded_rectangle(
-        (size * 0.06, size * 0.28, size * 0.72, size * 0.94),
+        (size * 0.08, size * 0.30, size * 0.70, size * 0.92),
         radius=radius,
         outline=fill,
         width=stroke,
@@ -73,11 +75,11 @@ def _draw_copy_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
 def _draw_check_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image:
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    w = max(2, round(size / 8))
+    w = max(1, round(size / 14))
     points = [
-        (size * 0.14, size * 0.52),
-        (size * 0.40, size * 0.78),
-        (size * 0.88, size * 0.22),
+        (size * 0.16, size * 0.52),
+        (size * 0.40, size * 0.76),
+        (size * 0.86, size * 0.24),
     ]
     draw.line(points, fill=fill, width=w, joint="curve")
     return img
@@ -85,8 +87,9 @@ def _draw_check_glyph(size: int, fill: tuple[int, int, int, int]) -> Image.Image
 
 def _make_btn_icon(kind: str = "copy") -> ctk.CTkImage:
     master = _ICON_PX * 4
-    light = (26, 25, 23, 255)
-    dark = (243, 241, 236, 255)
+    # Чуть мягче чистого угля — не перебивают текст
+    light = (95, 90, 82, 255)
+    dark = (200, 195, 186, 255)
     drawer = _draw_copy_glyph if kind == "copy" else _draw_check_glyph
     return ctk.CTkImage(
         light_image=drawer(master, light),
@@ -310,8 +313,12 @@ class WhisperApp(ctk.CTk):
             fg_color=COLOR["accent"],
             hover_color=COLOR["accent_hover"],
             border_color=COLOR["entry_border"],
+            border_width=1,
             checkmark_color=COLOR["surface"],
-            corner_radius=3,
+            checkbox_width=14,
+            checkbox_height=14,
+            corner_radius=2,
+            height=22,
         ).grid(row=7, column=1, columnspan=2, sticky="w", pady=(12, 4))
 
         actions = ctk.CTkFrame(form, fg_color="transparent")
