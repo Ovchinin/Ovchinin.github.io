@@ -1,6 +1,0 @@
-# Требуется Python 3.10–3.13 (рекомендуется 3.12). На 3.14 нет onnxruntime.
-faster-whisper>=1.1.0,<2
-customtkinter>=5.2.2
-Pillow>=10.0.0
-imageio-ffmpeg>=0.5.1
-fpdf2>=2.7.0,<3
