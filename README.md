@@ -5,9 +5,6 @@ macOS-приложение: **видео → читаемый русский т�
 
 Исходники: [`whisper-transcriber/`](whisper-transcriber/).
 
-> Репозиторий содержит **только** приложение «Транскрибация».  
-> Демо-сайт гостиницы TOXIN: [Ovchinin/TOXIN](https://github.com/Ovchinin/TOXIN).
-
 ## Скачать и установить (DMG)
 
 1. Откройте [Releases](https://github.com/Ovchinin/Transcription/releases)
