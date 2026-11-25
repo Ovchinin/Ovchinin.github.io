@@ -3,20 +3,268 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Транскрибация</title>
+  <title>Транскрибация — видео → текст на Mac</title>
+  <meta name="description" content="macOS-приложение: видео и аудио → читаемый русский текст. Локальный Whisper, установка через DMG без App Store.">
+  <link rel="icon" href="./assets/app-icon.png" type="image/png">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-           max-width: 40rem; margin: 4rem auto; padding: 0 1.25rem; color: #1a1917;
-           background: #f7f6f3; line-height: 1.5; }
-    a { color: #1a1917; }
-    .btn { display: inline-block; margin-top: 1rem; padding: 0.7rem 1.1rem;
-           background: #2a2825; color: #f7f6f3; text-decoration: none; border-radius: 8px; }
+    :root {
+      --bg: #e8e6e1;
+      --surface: #f7f6f3;
+      --ink: #1a1917;
+      --muted: #6f6a62;
+      --faint: #958f85;
+      --line: #d2cec5;
+      --accent: #2a2825;
+      --accent-hover: #1a1917;
+      --max: 720px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Gill Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 17px;
+      line-height: 1.55;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #f3f1ec 0%, transparent 55%),
+        radial-gradient(900px 400px at 100% 0%, #ddd9d1 0%, transparent 50%),
+        var(--bg);
+    }
+
+    a { color: var(--ink); }
+    a:hover { opacity: 0.75; }
+
+    .wrap {
+      width: min(var(--max), calc(100% - 2.5rem));
+      margin: 0 auto;
+    }
+
+    /* —— Hero —— */
+    .hero {
+      padding: 4.5rem 0 2rem;
+    }
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+    .brand-row img {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+    }
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(2.1rem, 5vw, 2.85rem);
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      line-height: 1.15;
+    }
+    .hero .lead {
+      margin: 1rem 0 0;
+      max-width: 36rem;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem 1.25rem;
+      margin-top: 1.75rem;
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.8rem 1.25rem;
+      background: var(--accent);
+      color: var(--surface);
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 0.98rem;
+      border: 1px solid transparent;
+      transition: background 0.15s ease;
+    }
+    .btn:hover {
+      background: var(--accent-hover);
+      opacity: 1;
+      color: var(--surface);
+    }
+    .link-quiet {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    /* —— Shot —— */
+    .shot {
+      padding: 1.5rem 0 3rem;
+    }
+    .shot figure {
+      margin: 0;
+    }
+    .shot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      box-shadow: 0 18px 40px rgba(26, 25, 23, 0.08);
+    }
+    .shot figcaption {
+      margin-top: 0.75rem;
+      color: var(--faint);
+      font-size: 0.88rem;
+    }
+
+    /* —— Sections —— */
+    section.block {
+      padding: 2.5rem 0;
+      border-top: 1px solid var(--line);
+    }
+    section.block h2 {
+      margin: 0 0 1.1rem;
+      font-size: 1.45rem;
+      font-weight: 560;
+      letter-spacing: 0.01em;
+    }
+    .rule {
+      width: 40px;
+      height: 2px;
+      background: var(--ink);
+      margin: 0 0 1.25rem;
+      border: 0;
+    }
+
+    ol.steps {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+    ol.steps li {
+      margin: 0.55rem 0;
+      padding-left: 0.25rem;
+    }
+    .note {
+      margin: 1.25rem 0 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .note strong { color: var(--ink); font-weight: 560; }
+
+    ul.features {
+      margin: 0;
+      padding-left: 1.15rem;
+    }
+    ul.features li {
+      margin: 0.55rem 0;
+    }
+
+    .bottom-cta {
+      padding: 2.75rem 0 4rem;
+      border-top: 1px solid var(--line);
+      text-align: left;
+    }
+    .bottom-cta p {
+      margin: 0 0 1rem;
+      color: var(--muted);
+    }
+
+    footer {
+      padding: 0 0 3rem;
+      color: var(--faint);
+      font-size: 0.88rem;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.9em;
+      background: rgba(255,255,255,0.45);
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+    }
+
+    @media (max-width: 560px) {
+      .hero { padding-top: 3rem; }
+      body { font-size: 16px; }
+    }
   </style>
 </head>
 <body>
-  <h1>Транскрибация</h1>
-  <p>Локальное macOS-приложение: видео и аудио → читаемый русский текст (Whisper).</p>
-  <p><a class="btn" href="https://github.com/Ovchinin/Transcription/releases">Скачать transcription.dmg</a></p>
-  <p><a href="https://github.com/Ovchinin/Transcription">Репозиторий на GitHub</a></p>
+  <header class="hero">
+    <div class="wrap">
+      <div class="brand-row">
+        <img src="./assets/app-icon.png" width="48" height="48" alt="">
+        <h1>Транскрибация</h1>
+      </div>
+      <p class="lead">
+        macOS-приложение: <strong>видео → читаемый русский текст</strong> (локальный Whisper).
+        Установка через обычный <strong>.dmg</strong>, запуск по иконке — <strong>без App Store</strong>.
+      </p>
+      <div class="cta-row">
+        <a class="btn" href="https://github.com/Ovchinin/Transcription/releases/latest">Скачать transcription.dmg</a>
+        <a class="link-quiet" href="https://github.com/Ovchinin/Transcription">Репозиторий на GitHub</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="shot">
+    <div class="wrap">
+      <figure>
+        <img src="./assets/app-ui.png" alt="Окно приложения Транскрибация" width="1200" height="800">
+        <figcaption>Интерфейс приложения: файл, модель Whisper, прогресс и результат.</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <section class="block" id="install">
+    <div class="wrap">
+      <h2>Скачать и установить (DMG)</h2>
+      <div class="rule" aria-hidden="true"></div>
+      <ol class="steps">
+        <li>Откройте <a href="https://github.com/Ovchinin/Transcription/releases">Releases</a> репозитория <strong>Transcription</strong></li>
+        <li>Скачайте <code>transcription.dmg</code> (последний релиз)</li>
+        <li>Откройте DMG и перетащите <strong>Транскрибация</strong> в папку <strong>Applications</strong></li>
+        <li>Запустите из Applications / Launchpad</li>
+        <li>При желании перетащите иконку из Applications на рабочий стол или в Dock</li>
+      </ol>
+      <p class="note">
+        При первом запуске приложение само предложит <strong>бесплатно установить Whisper</strong> из себя (после вашего подтверждения).
+      </p>
+      <p class="note">
+        Если macOS блокирует запуск (не из App Store):
+        <strong>Системные настройки → Конфиденциальность и безопасность → Всё равно открыть</strong>.
+      </p>
+    </div>
+  </section>
+
+  <section class="block" id="features">
+    <div class="wrap">
+      <h2>Что умеет</h2>
+      <div class="rule" aria-hidden="true"></div>
+      <ul class="features">
+        <li>Выбор видео/аудио и <strong>папки вывода</strong> на каждую запись (по умолчанию Рабочий стол; результат — <code>.txt</code>)</li>
+        <li>«Сохранить как…»: <code>.txt</code>, <code>.md</code>, <code>.doc</code>, <code>.pdf</code>, <code>.rtf</code>, <code>.html</code></li>
+        <li>Записи экрана с телефона: усиление тихого звука, смешивание дорожек, без агрессивного VAD</li>
+        <li>Прогресс: процент, скорость, сколько осталось</li>
+        <li>Без лимита размера файла</li>
+        <li>Русская пунктуация в результате</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="bottom-cta">
+    <div class="wrap">
+      <p>Готово к установке на macOS 12+</p>
+      <a class="btn" href="https://github.com/Ovchinin/Transcription/releases/latest">Скачать transcription.dmg</a>
+    </div>
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <a href="https://github.com/Ovchinin/Transcription">github.com/Ovchinin/Transcription</a>
+    </div>
+  </footer>
 </body>
 </html>
