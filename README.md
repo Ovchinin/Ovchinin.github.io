@@ -1,13 +1,18 @@
-# TOXIN
+# Транскрибация
 
-Демо-сайт гостиницы **TOXIN** (бронирование номеров).
+macOS-приложение: **видео → читаемый русский текст** (локальный Whisper).  
+Установка через обычный **`.dmg`**, запуск по иконке — **без App Store**.
 
-Ранее эти файлы ошибочно лежали в репозитории [Transcription](https://github.com/Ovchinin/Transcription) рядом с приложением «Транскрибация».  
-Сейчас сайт живёт здесь: [Ovchinin.github.io](https://github.com/Ovchinin/Ovchinin.github.io) → https://ovchinin.github.io/
+Исходники: [`whisper-transcriber/`](whisper-transcriber/).
 
-## Страницы
+> Репозиторий содержит **только** приложение «Транскрибация».  
+> Демо-сайт гостиницы TOXIN вынесен (см. ветку `archive/toxin-site` до появления отдельного репозитория).
 
-- `index.html` — главная
-- `search-room.html` — поиск номеров
-- `room-details.html` — карточка номера
-- `registration.html` / `authorization.html` — регистрация / вход
+## Скачать и установить (DMG)
+
+1. Откройте [Releases](https://github.com/Ovchinin/Transcription/releases)
+2. Скачайте **`transcription.dmg`** (последний релиз, сейчас **v1.3.12**)
+3. Откройте DMG и перетащите **Транскрибация** в **Applications**
+4. Запустите из Applications / Launchpad
+
+Подробности — в [`whisper-transcriber/README.md`](whisper-transcriber/README.md).
