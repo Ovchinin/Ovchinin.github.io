@@ -16,8 +16,33 @@ APP_SRC="${RESOURCES}/app_src"
 export PYTHONUTF8=1
 export LANG="${LANG:-ru_RU.UTF-8}"
 
+log_launcher() {
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >>"${LOG_DIR}/launcher.log"
+}
+
+host_arch() {
+  local m
+  m="$(uname -m)"
+  case "$m" in
+    aarch64) echo arm64 ;;
+    *) echo "$m" ;;
+  esac
+}
+
+normalize_arch() {
+  case "$1" in
+    aarch64|arm64) echo arm64 ;;
+    x86_64|amd64) echo x86_64 ;;
+    *) echo "$1" ;;
+  esac
+}
+
 python_major_minor() {
   "$1" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null || true
+}
+
+python_arch() {
+  normalize_arch "$("$1" -c 'import platform; print(platform.machine())' 2>/dev/null || true)"
 }
 
 python_is_supported() {
@@ -29,45 +54,100 @@ raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 13) else 1)
 PY
 }
 
+python_is_native() {
+  local bin="$1"
+  local want have
+  want="$(host_arch)"
+  have="$(python_arch "$bin")"
+  [[ -n "$have" && "$have" == "$want" ]]
+}
+
+# Pillow (и другие .so) могли остаться от запуска под Rosetta — импорт ловит несовместимую арх.
+pillow_ok() {
+  local bin="$1"
+  [[ -x "$bin" ]] || return 1
+  "$bin" - <<'PY' 2>/dev/null
+try:
+    from PIL import Image  # noqa: F401
+except ModuleNotFoundError:
+    raise SystemExit(0)  # ещё не ставили — ок, поставит pip
+except Exception:
+    raise SystemExit(1)
+raise SystemExit(0)
+PY
+}
+
 find_python() {
-  if [[ -n "${TRANSKRIBACIYA_PYTHON:-}" ]] && python_is_supported "${TRANSKRIBACIYA_PYTHON}"; then
+  if [[ -n "${TRANSKRIBACIYA_PYTHON:-}" ]] && python_is_supported "${TRANSKRIBACIYA_PYTHON}" && python_is_native "${TRANSKRIBACIYA_PYTHON}"; then
     echo "${TRANSKRIBACIYA_PYTHON}"
     return
   fi
 
-  local candidates=(
-    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12"
-    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
-    "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11"
-    "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
-    "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13"
-    "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
-    "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3.10"
-    "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3"
-    "/opt/homebrew/bin/python3.12"
-    "/opt/homebrew/bin/python3.11"
-    "/opt/homebrew/bin/python3.13"
-    "/opt/homebrew/bin/python3.10"
-    "/usr/local/bin/python3.12"
-    "/usr/local/bin/python3.11"
-    "/usr/local/bin/python3.13"
-    "/usr/local/bin/python3.10"
-    "/opt/homebrew/bin/python3"
-    "/usr/local/bin/python3"
-  )
+  local host
+  host="$(host_arch)"
 
-  local c ver
+  # На Apple Silicon сначала нативный Homebrew; Framework Python часто universal2 и раньше
+  # мог поставить x86_64-колёса под Rosetta.
+  local candidates=()
+  if [[ "$host" == "arm64" ]]; then
+    candidates=(
+      "/opt/homebrew/bin/python3.12"
+      "/opt/homebrew/bin/python3.11"
+      "/opt/homebrew/bin/python3.13"
+      "/opt/homebrew/bin/python3.10"
+      "/opt/homebrew/bin/python3"
+      "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12"
+      "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+      "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11"
+      "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+      "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13"
+      "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+      "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3.10"
+      "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3"
+      "/usr/local/bin/python3.12"
+      "/usr/local/bin/python3.11"
+      "/usr/local/bin/python3.13"
+      "/usr/local/bin/python3.10"
+      "/usr/local/bin/python3"
+    )
+  else
+    candidates=(
+      "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12"
+      "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+      "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11"
+      "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+      "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13"
+      "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+      "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3.10"
+      "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3"
+      "/usr/local/bin/python3.12"
+      "/usr/local/bin/python3.11"
+      "/usr/local/bin/python3.13"
+      "/usr/local/bin/python3.10"
+      "/usr/local/bin/python3"
+      "/opt/homebrew/bin/python3.12"
+      "/opt/homebrew/bin/python3.11"
+      "/opt/homebrew/bin/python3.13"
+      "/opt/homebrew/bin/python3.10"
+      "/opt/homebrew/bin/python3"
+    )
+  fi
+
+  local c
   for c in "${candidates[@]}"; do
-    if python_is_supported "$c"; then
+    if python_is_supported "$c" && python_is_native "$c"; then
       echo "$c"
       return
     fi
   done
 
-  # Последняя попытка: любой python3 в PATH, если версия подходящая
-  if command -v python3 >/dev/null 2>&1 && python_is_supported "$(command -v python3)"; then
-    command -v python3
-    return
+  # Последняя попытка: любой python3 в PATH нужной версии и арх
+  if command -v python3 >/dev/null 2>&1; then
+    c="$(command -v python3)"
+    if python_is_supported "$c" && python_is_native "$c"; then
+      echo "$c"
+      return
+    fi
   fi
 
   local found_ver=""
@@ -76,13 +156,13 @@ find_python() {
   fi
 
   osascript <<EOF
-display dialog "Для «Транскрибация» нужен Python 3.10–3.13 (рекомендуется 3.12).
+display dialog "Для «Транскрибация» нужен Python 3.10–3.13 под архитектуру $(host_arch) (рекомендуется 3.12).
 
 Сейчас: ${found_ver:-не найден}.
 Python 3.14 пока не подходит — пакет onnxruntime для Whisper на нём недоступен.
 
 1) Скачайте Python 3.12 с https://www.python.org/downloads/macos/
-2) Установите его
+2) Установите его (на Apple Silicon — обычный установщик, без Rosetta)
 3) Снова откройте «Транскрибация»
 
 Приложение само пересоздаст окружение." buttons {"OK"} default button 1 with title "Транскрибация"
@@ -90,30 +170,85 @@ EOF
   exit 1
 }
 
+install_gui_deps() {
+  local force="${1:-0}"
+  local arch
+  arch="$(host_arch)"
+  export ARCHFLAGS="-arch ${arch}"
+  python -m pip install --upgrade pip >/dev/null 2>>"${LOG_DIR}/pip.log" || true
+  if [[ "$force" -eq 1 ]]; then
+    python -m pip install --force-reinstall --no-cache-dir \
+      "customtkinter>=5.2.2" "Pillow>=10.0.0" "fpdf2>=2.7.0,<3" \
+      >>"${LOG_DIR}/pip.log" 2>&1
+  else
+    python -m pip install \
+      "customtkinter>=5.2.2" "Pillow>=10.0.0" "fpdf2>=2.7.0,<3" \
+      >>"${LOG_DIR}/pip.log" 2>&1
+  fi
+}
+
+recreate_venv() {
+  local reason="$1"
+  log_launcher "recreating venv; reason=${reason}; host=$(host_arch); python=${PYTHON_BIN} (${PY_VER})"
+  rm -rf "${VENV}"
+  "${PYTHON_BIN}" -m venv "${VENV}"
+}
+
 PYTHON_BIN="$(find_python)"
 PY_VER="$(python_major_minor "${PYTHON_BIN}")"
+HOST_ARCH="$(host_arch)"
 
-# Если venv от несовместимого Python (например 3.14) — пересоздаём
 NEED_VENV=0
 if [[ ! -x "${VENV}/bin/python" ]]; then
   NEED_VENV=1
 elif ! python_is_supported "${VENV}/bin/python"; then
-  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) recreating venv; old=$(python_major_minor "${VENV}/bin/python"); new=${PY_VER}" >>"${LOG_DIR}/launcher.log"
-  rm -rf "${VENV}"
   NEED_VENV=1
+  REASON="unsupported-python=$(python_major_minor "${VENV}/bin/python")"
+elif ! python_is_native "${VENV}/bin/python"; then
+  NEED_VENV=1
+  REASON="venv-arch=$(python_arch "${VENV}/bin/python") host=${HOST_ARCH}"
+elif ! pillow_ok "${VENV}/bin/python"; then
+  NEED_VENV=1
+  REASON="broken-pillow-extension"
 fi
 
 if [[ "${NEED_VENV}" -eq 1 ]]; then
-  "${PYTHON_BIN}" -m venv "${VENV}"
+  recreate_venv "${REASON:-missing}"
 fi
 
 # shellcheck disable=SC1091
 source "${VENV}/bin/activate"
 
 # Минимальные пакеты GUI — Whisper поставит само приложение после согласия
-python -m pip install --upgrade pip >/dev/null 2>>"${LOG_DIR}/pip.log" || true
-# GUI + PDF: fpdf2 нужен для «Сохранить как… → PDF» даже без переустановки Whisper
-python -m pip install "customtkinter>=5.2.2" "Pillow>=10.0.0" "fpdf2>=2.7.0,<3" >>"${LOG_DIR}/pip.log" 2>&1 || true
+if ! install_gui_deps 0; then
+  log_launcher "pip install failed; retrying force-reinstall"
+  install_gui_deps 1 || true
+fi
+
+# Если Pillow всё ещё с чужой архитектуры — полный пересбор venv
+if ! pillow_ok "${VENV}/bin/python"; then
+  log_launcher "pillow still broken after pip; full recreate + force-reinstall"
+  deactivate 2>/dev/null || true
+  recreate_venv "pillow-reinstall"
+  # shellcheck disable=SC1091
+  source "${VENV}/bin/activate"
+  install_gui_deps 1 || true
+fi
+
+if ! pillow_ok "${VENV}/bin/python"; then
+  osascript <<EOF || true
+display dialog "«Транскрибация» не смогла подготовить окружение Python (Pillow / архитектура ${HOST_ARCH}).
+
+Подробности:
+${LOG_DIR}/pip.log
+${LOG_DIR}/launcher.log
+
+Попробуйте удалить папку:
+${SUPPORT}/venv
+и снова открыть приложение." buttons {"OK"} default button 1 with title "Транскрибация"
+EOF
+  exit 1
+fi
 
 cd "${APP_SRC}"
 # Не глотать traceback: при падении GUI показать диалог (иначе .app просто исчезает)
