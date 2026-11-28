@@ -18,7 +18,13 @@ from .ffmpeg_tools import (
     wav_rms_level,
 )
 from .punctuation_ru import format_russian_transcript, segments_to_plain_text, segments_to_srt
-from .models_info import download_status_message, is_model_cached, model_download_hint, models_dir
+from .models_info import (
+    download_status_message,
+    is_model_cached,
+    model_download_hint,
+    models_dir,
+    resolve_revision_after_download,
+)
 from .settings import AppSettings
 
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".opus"}
@@ -405,8 +411,43 @@ def get_model(
         finally:
             stop.set()
 
+        # Зафиксировать версию (revision) после успешной загрузки/скачивания
+        try:
+            resolve_revision_after_download(model_size)
+        except Exception:
+            pass
+
         _model_cache[key] = model
         return model
+
+
+def clear_model_memory_cache(model_size: str | None = None) -> None:
+    """Сбросить модель(и) из RAM после удаления/обновления на диске."""
+    with _model_lock:
+        if model_size is None:
+            _model_cache.clear()
+            return
+        for key in list(_model_cache.keys()):
+            if key[0] == model_size:
+                _model_cache.pop(key, None)
+
+
+def redownload_model(
+    model_size: str,
+    on_progress: ProgressCallback | None = None,
+) -> None:
+    """Удалить локальные файлы и скачать модель заново (обновление)."""
+    from .models_info import delete_model_files
+
+    clear_model_memory_cache(model_size)
+    delete_model_files(model_size)
+    get_model(
+        model_size=model_size,
+        device="cpu",
+        compute_type="int8",
+        on_progress=on_progress,
+        cancel_event=None,
+    )
 
 
 def transcribe_media(

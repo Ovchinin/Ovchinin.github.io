@@ -25,6 +25,7 @@ from .models_info import (
     is_model_cached,
     model_label_for_ui,
 )
+from .models_panel import ModelsPanel
 from .settings import AppSettings
 from .setup_dialog import ask_whisper_install_consent
 from .theme import (
@@ -388,6 +389,19 @@ class WhisperApp(ctk.CTk):
         self.model_chevron_btn.grid(row=0, column=1, sticky="e", padx=(0, 6), pady=1)
         self.model_field.bind("<Button-1>", lambda _e: self._toggle_model_menu())
 
+        self.installed_models_btn = ctk.CTkButton(
+            form,
+            text="Установленные модели",
+            width=168,
+            height=36,
+            font=F(12),
+            command=self._open_installed_models,
+            **SECONDARY_BTN,
+        )
+        self.installed_models_btn.grid(row=3, column=2, padx=(10, 0), pady=6)
+        self._models_panel: ModelsPanel | None = None
+        self._models_bg_status: str | None = None
+
         self.model_hint = ctk.CTkLabel(
             form,
             text="",
@@ -652,6 +666,25 @@ class WhisperApp(ctk.CTk):
 
     def _selected_model(self) -> str:
         return _model_name_from_menu(self.model_var.get())
+
+    def _open_installed_models(self) -> None:
+        if self._models_panel is not None and self._models_panel.winfo_exists():
+            self._models_panel.lift()
+            self._models_panel.focus_force()
+            return
+        self._models_panel = ModelsPanel(
+            self,
+            current_model=self._selected_model(),
+            on_models_changed=self._refresh_model_hint,
+            on_background_status=self._set_models_button_status,
+        )
+
+    def _set_models_button_status(self, status: str | None) -> None:
+        self._models_bg_status = status
+        if status:
+            self.installed_models_btn.configure(text=f"Установленные модели ({status})")
+        else:
+            self.installed_models_btn.configure(text="Установленные модели")
 
     def _toggle_model_menu(self) -> None:
         if self._model_menu_open:
